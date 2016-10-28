@@ -53,14 +53,18 @@ impl Encounter
     
     fn add_attacker(&self, attacker: &str)
     {
-        println!("Totes adding it, just don't check!");
         (self.attackers).borrow_mut().push(Attacker{attacks: RefCell::new(Vec::new()), final_damage: 0, final_healed: 0, name: String::from(attacker)});
+    }
+    
+    fn attack(&self, attack_data: regex::Captures)
+    {
+        println!("{}",attack_data.name("attack").unwrap());
     }
 }
 
 fn main()
 {
-    let f = File::open("/media/bergman/Games/SteamLibrary/SteamApps/common/EverQuest 2/logs/Maj'Dul/eq2log_Shepherd.txt").unwrap();
+    let f = File::open("/home/bergman/Documents/rust/EXP/eq2log_Shepherd.txt").unwrap();
     /*{
         Ok(file) => file,
         Err(e) => 
@@ -91,14 +95,11 @@ fn main()
             match temp {None => {}, Some(cap) =>
             {
                 //look to see if the attacker already has a post, if so place the attack there, if not push a new attacker
-                if encounters[0].exists(cap.name("attacker").unwrap())
-                {
-                    println!("He's there alrighty!");
-                }
-                else
+                if !encounters[0].exists(cap.name("attacker").unwrap())
                 {
                     encounters[0].add_attacker(cap.name("attacker").unwrap());
                 }
+                encounters[0].attack(cap);
                 //encounters[0].attackers.cap.name("datetime").unwrap()
             }};
             //if buffer.find("attacks") != ;
@@ -117,8 +118,7 @@ fn main()
     }
 }
 
-/* \[P<DATE>\]
-\((?P<time>\d+)\)
+/*
 (1477272172)[Mon Oct 24 03:22:52 2016] YOUR Raging Whirlwind multi attacks Bonesnapper for a critical of 38996 cold damage.\r\n
 (1477272172)[Mon Oct 24 03:22:52 2016] Kabernet\'s Asylum multi attacks Bonesnapper for a critical of 36622 mental damage.\r\n
 
