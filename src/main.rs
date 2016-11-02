@@ -22,6 +22,13 @@ struct Attack
     crit: String // "" for did not crit?
 }
 
+impl Attack
+{
+    fn attack(&mut self, attack_data: &regex::Captures)
+    {
+    }
+}
+
 struct Attacker
 {
     attacks: RefCell<Vec<Attack>>,
@@ -30,9 +37,17 @@ struct Attacker
     name: String
 }
 
+impl Attacker
+{
+    fn attack(&mut self, attack_data: &regex::Captures)
+    {
+        self.final_damage = 50;
+    }
+}
+
 struct Encounter
 {
-    attackers: RefCell<Vec<Attacker>>,
+    attackers: Vec<Attacker>,
     encounter_start: String, //timestamp of when the fight started, get this from whatever starts the encounter
     encounter_duration: u64 //duration of the encounter in nanoseconds, divide by 1000 to get seconds
 }
@@ -41,9 +56,17 @@ impl Encounter
 {
     fn exists(&self, name:&str) -> bool
     {
-        for i in 0..((self.attackers.borrow()).len())
+        /*for i in 0..((self.attackers.botemp-1rrow()).len())
         {
             if ((self.attackers).borrow())[i].name == name
+            {
+                return  true;
+            }
+        }
+        return false;*/
+        for i in 0..((self.attackers).len())
+        {
+            if ((self.attackers))[i].name == name
             {
                 return  true;
             }
@@ -51,14 +74,16 @@ impl Encounter
         return false;
     }
     
-    fn add_attacker(&self, attacker: &str)
+    fn attack(&mut self, attack_data: regex::Captures)
     {
-        (self.attackers).borrow_mut().push(Attacker{attacks: RefCell::new(Vec::new()), final_damage: 0, final_healed: 0, name: String::from(attacker)});
-    }
-    
-    fn attack(&self, attack_data: regex::Captures)
-    {
+        if !self.exists(attack_data.name("attacker").unwrap())
+        {
+            (self.attackers).push(Attacker{attacks: RefCell::new(Vec::new()), final_damage: 0, final_healed: 0, name: String::from(attack_data.name("attacker").unwrap())});
+            let attackers_len = self.attackers.len() - 1;
+            (self.attackers)[attackers_len].attack(&attack_data);
+        }
         println!("{}",attack_data.name("attack").unwrap());
+        self.encounter_start = String::from("Test");
     }
 }
 
@@ -75,7 +100,7 @@ fn main()
 
     //Start a encounter, this code will be moved into the main loop when it works
     let mut encounters: Vec<Encounter> = Vec::new();
-    encounters.push(Encounter{ attackers: RefCell::new(Vec::new()), encounter_start: String::from("START"), encounter_duration : 0});
+    encounters.push(Encounter{ attackers: Vec::new(), encounter_start: String::from("START"), encounter_duration : 0});
     
     let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D+)(YOUR|'s) (?P<attack>\D+) ((multi attacks)|multi) (?P<target>\D+) for a (?P<crittype>\D+) of (?P<damage>\d+) (cold|heat|mental|arcane|poison|noxious) damage").unwrap();
 
@@ -95,10 +120,6 @@ fn main()
             match temp {None => {}, Some(cap) =>
             {
                 //look to see if the attacker already has a post, if so place the attack there, if not push a new attacker
-                if !encounters[0].exists(cap.name("attacker").unwrap())
-                {
-                    encounters[0].add_attacker(cap.name("attacker").unwrap());
-                }
                 encounters[0].attack(cap);
                 //encounters[0].attackers.cap.name("datetime").unwrap()
             }};
