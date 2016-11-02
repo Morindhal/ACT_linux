@@ -3,13 +3,14 @@ extern crate regex;
 
 use regex::Regex;
 
-use std::cell::Ref;
-use std::cell::RefCell;
 
 use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 use std::io::BufReader;
+use std::io::SeekFrom;
+
+use std::fmt;
 
 use std::{thread, time};
 
@@ -31,7 +32,7 @@ impl Attack
 
 struct Attacker
 {
-    attacks: RefCell<Vec<Attack>>,
+    attacks: Vec<Attack>,
     final_damage: u64,
     final_healed: u64,
     name: String
@@ -41,8 +42,13 @@ impl Attacker
 {
     fn attack(&mut self, attack_data: &regex::Captures)
     {
-        self.final_damage = 50;
+        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), crit: String::from(attack_data.name("crittype").unwrap())});
+        self.final_damage += attack_data.name("damage").unwrap().parse::<u64>().unwrap();
+        println!("{}-{}-damage", self.name, self.final_damage);
     }
+    
+    fn print(&self) -> &str
+    {"Test"}
 }
 
 struct Encounter
@@ -56,14 +62,6 @@ impl Encounter
 {
     fn exists(&self, name:&str) -> bool
     {
-        /*for i in 0..((self.attackers.botemp-1rrow()).len())
-        {
-            if ((self.attackers).borrow())[i].name == name
-            {
-                return  true;
-            }
-        }
-        return false;*/
         for i in 0..((self.attackers).len())
         {
             if ((self.attackers))[i].name == name
@@ -78,14 +76,30 @@ impl Encounter
     {
         if !self.exists(attack_data.name("attacker").unwrap())
         {
-            (self.attackers).push(Attacker{attacks: RefCell::new(Vec::new()), final_damage: 0, final_healed: 0, name: String::from(attack_data.name("attacker").unwrap())});
+            (self.attackers).push(Attacker{attacks: Vec::new(), final_damage: 0, final_healed: 0, name: String::from(attack_data.name("attacker").unwrap())});
+        }
+        {
             let attackers_len = self.attackers.len() - 1;
             (self.attackers)[attackers_len].attack(&attack_data);
         }
-        println!("{}",attack_data.name("attack").unwrap());
-        self.encounter_start = String::from("Test");
+        self.encounter_start = String::from(attack_data.name("datetime").unwrap());
     }
 }
+
+
+impl fmt::Display for Encounter
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        write!(f, "Encounter:\n");
+        for i in 0..((self.attackers).len())
+        {
+            write!(f, "{}", ((self.attackers))[i].print());
+        }
+        write!(f, "\nFight over")
+    }
+}
+
 
 fn main()
 {
@@ -102,40 +116,44 @@ fn main()
     let mut encounters: Vec<Encounter> = Vec::new();
     encounters.push(Encounter{ attackers: Vec::new(), encounter_start: String::from("START"), encounter_duration : 0});
     
-    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D+)(YOUR|'s) (?P<attack>\D+) ((multi attacks)|multi) (?P<target>\D+) for a (?P<crittype>\D+) of (?P<damage>\d+) (cold|heat|mental|arcane|poison|noxious) damage").unwrap();
+    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR )(?P<attack>\D+) ((multi attacks)|hits|hit) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
 
     let mut file = BufReader::new(&f);
+    file.seek(SeekFrom::End(-10));
     
     let mut buffer = String::new();
     let mut battle_timer = time::Instant::now();
+    let mut fightdone = true;
     'main: loop
     {
+        buffer.clear();
         if file.read_line(&mut buffer).unwrap() > 0
         {
-            /*CHECK IF ATTACK
-                CHECK ATTACKER, IF NO ATTACKER EXISTS CREATE A NEW ONE <-- this is done by String-matching the ATTACKERS name
-                    PARSE ATTACK INTO ENCOUNTERS.ATTACKERS.ATTACK <-- this is done by String-matching the ATTACKERS name
-            SAME FOR HEAL*/
-            let temp = re.captures(buffer.as_str()) ;
-            match temp {None => {}, Some(cap) =>
+            match re.captures(buffer.as_str()) {None => {}, Some(cap) =>
             {
-                //look to see if the attacker already has a post, if so place the attack there, if not push a new attacker
-                encounters[0].attack(cap);
-                //encounters[0].attackers.cap.name("datetime").unwrap()
+                if fightdone
+                {
+                    println!("New fight!");
+                    encounters.push(Encounter{ attackers: Vec::new(), encounter_start: String::from("START"), encounter_duration : 0});
+                    fightdone = false;
+                }
+                encounters.last_mut().unwrap().attack(cap);
+                battle_timer = time::Instant::now();
+                encounters.last_mut().unwrap().encounter_duration += battle_timer.elapsed().subsec_nanos() as u64;
             }};
-            //if buffer.find("attacks") != ;
-            encounters[0].encounter_duration += battle_timer.elapsed().subsec_nanos() as u64;
-            battle_timer = time::Instant::now();
         }
         else
         {
             thread::sleep(time::Duration::from_millis(100));
-            if battle_timer.elapsed() >= time::Duration::from_millis(3000)
+        }
+        if battle_timer.elapsed() >= time::Duration::from_millis(3000)
+        {
+            if !fightdone
             {
-                println!("New battle incoming, {:?} time has elapsed since the last one.", battle_timer.elapsed().as_secs());
+                println!("{}", encounters.last().unwrap());
+                fightdone = true;
             }
         }
-        buffer.clear();
     }
 }
 
