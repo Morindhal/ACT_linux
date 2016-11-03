@@ -89,7 +89,7 @@ fn main()
                 {
                     match trigged.captures(triggerbuffer.as_str()) {None => {}, Some(cap) =>
                     {
-                                speak(&CString::new(format!("espeak \"{}\"", trigger)).unwrap());
+                        speak(&CString::new(format!("espeak \"{}\"", trigger)).unwrap());
                     }};
                 }
             });
@@ -131,8 +131,12 @@ fn main()
             if !fightdone
             {
                 encounters.last_mut().unwrap().attackers.sort();
-                println!("{}", encounters.last().unwrap());
-                ctx.set_contents(format!("{}", encounters.last().unwrap()));
+                println!("{}", encounters.last().unwrap());;
+                match ctx.set_contents(format!("{}", encounters.last().unwrap()))
+                {
+                    Ok(_)=>{},
+                    Err(e)=>println!("Clipboard error: {}", e)
+                }
                 fightdone = true;
             }
         }

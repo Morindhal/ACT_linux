@@ -90,8 +90,8 @@ impl Attacker
     pub fn print(&self, encounter_duration : u64) -> String
     {
         let dps = match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  };
-        let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000000.0  };
-        format!("{name:.*} \t  {dps:.2}m DPS\t{hps}k HPS\t", 4, name=self.name, dps=dps, hps=hps)
+        let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
+        format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
     }
 }
 
