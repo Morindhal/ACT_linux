@@ -19,10 +19,12 @@ use std::io::BufReader;
 use std::io::SeekFrom;
 
 use std::fmt;
+use std::cmp::Ordering;
 
 use std::{thread, time};
 
 
+#[derive(Eq)]
 struct Attack
 {
     damage: u64,
@@ -39,12 +41,61 @@ impl Attack
     }
 }
 
+impl Ord for Attack
+{
+    fn cmp(&self, other: &Attack) -> Ordering
+    {
+        self.damage.cmp(&other.damage)
+    }
+}
+
+impl PartialOrd for Attack
+{
+    fn partial_cmp(&self, other: &Attack) -> Option<Ordering>
+    {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Attack
+{
+    fn eq(&self, other: &Attack) -> bool
+    {
+        self.damage == other.damage
+    }
+}
+
+#[derive(Eq)]
 struct Attacker
 {
     attacks: Vec<Attack>,
     final_damage: u64,
     final_healed: u64,
     name: String
+}
+
+impl Ord for Attacker
+{
+    fn cmp(&self, other: &Attacker) -> Ordering
+    {
+        other.final_damage.cmp(&self.final_damage)
+    }
+}
+
+impl PartialOrd for Attacker
+{
+    fn partial_cmp(&self, other: &Attacker) -> Option<Ordering>
+    {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Attacker
+{
+    fn eq(&self, other: &Attacker) -> bool
+    {
+        self.final_damage == other.final_damage
+    }
 }
 
 impl Attacker
@@ -57,7 +108,9 @@ impl Attacker
     
     fn print(&self, encounter_duration : u64) -> String
     {
-        format!("{} \t  {:.2}m DPS\t{}k HPS\t", self.name, match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  }, match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000000.0  })
+        let dps = match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  };
+        let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000000.0  };
+        format!("{name:.*} \t  {dps:.2}m DPS\t{hps}k HPS\t", 4, name=self.name, dps=dps, hps=hps)
     }
 }
 
@@ -71,28 +124,34 @@ struct Encounter
 
 impl Encounter
 {
-    fn exists(&self, name:&str) -> bool
+    fn exists(&self, name:&str) -> i32
     {
         for i in 0..((self.attackers).len())
         {
             if ((self.attackers))[i].name == name
             {
-                return  true;
+                return  i as i32;
             }
         }
-        return false;
+        return -1;
     }
     
     fn attack(&mut self, attack_data: regex::Captures)
     {
-        if !self.exists(match attack_data.name("attacker").unwrap() { "" => "Shepherd", var => var})
+        let attacker_name = match attack_data.name("attacker").unwrap() { "" => "Shepherd", var => var};
+        if self.exists(attacker_name) == -1
         {
-            (self.attackers).push(Attacker{attacks: Vec::new(), final_damage: 0, final_healed: 0, name: String::from(match attack_data.name("attacker").unwrap() { "" => "Shepherd", var => var})});
+            (self.attackers).push(Attacker{attacks: Vec::new(), final_damage: 0, final_healed: 0, name: String::from(attacker_name)});
         }
         {
-            let attackers_len = self.attackers.len() - 1;
-            (self.attackers)[attackers_len].attack(&attack_data);
+            let attackers_len = self.exists(attacker_name) as usize;
+            self.attackers[attackers_len].attack(&attack_data);
         }
+    }
+    
+    fn order(&mut self)
+    {
+        
     }
 }
 
@@ -100,14 +159,14 @@ impl Encounter
 impl fmt::Display for Encounter
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {
+    {;
         let duration = (self.encounter_end-self.encounter_start);
         write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
         for i in 0..((self.attackers).len())
         {
-            write!(f, "{}", ((self.attackers))[i].print( duration.num_seconds() as u64 ));
+            write!(f, "{}\n", ((self.attackers))[i].print( duration.num_seconds() as u64 ));
         }
-        write!(f, "\nFight over")
+        write!(f, "\n")
     }
 }
 
@@ -152,13 +211,13 @@ fn main()
                     triggers.insert("Verily", Regex::new(r".*i also rule.*").unwrap());
                 for (trigger, trigged) in triggers.iter()
                 {
-                    match trigged.captures(triggerbuffer.as_str()) {None => {println!("{}",triggerbuffer)}, Some(cap) =>
+                    match trigged.captures(triggerbuffer.as_str()) {None => {}, Some(cap) =>
                     {
                                 speak(&CString::new(format!("espeak \"{}\"", trigger)).unwrap());
                     }};
                 }
             });
-            match re.captures(buffer.as_str()) {None => {println!("{}",buffer)}, Some(cap) =>
+            match re.captures(buffer.as_str()) {None => {}, Some(cap) =>
             {
                 match timeparser.captures(cap.name("datetime").unwrap()) {None => {}, Some(time_cap) =>
                 {
@@ -175,7 +234,7 @@ fn main()
                                                 );
                 if fightdone
                 {
-                    println!("\n\n\n\n\nNew fight!");
+                    println!("\n\n\n\n\n");
                     encounters.push(Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0});
                     fightdone = false;
                 }
@@ -195,6 +254,7 @@ fn main()
         {
             if !fightdone
             {
+                encounters.last_mut().unwrap().attackers.sort();
                 println!("{}", encounters.last().unwrap());
                 fightdone = true;
             }
@@ -207,7 +267,9 @@ fn main()
 (1477272172)[Mon Oct 24 03:22:52 2016] Kabernet\'s Asylum multi attacks Bonesnapper for a critical of 36622 mental damage.\r\n
 (1478123041)[Wed Nov  2 22:44:01 2016] YOU hit training dummy for a critical of 377262 heat damage.
 (1478123041)[Wed Nov  2 22:44:01 2016] YOU multi attack training dummy for a critical of 148320 heat damage.
+(1478132824)[Thu Nov  3 01:27:04 2016] Devorstator's Impatience heals Devorstator for 43947 hit points.
 
+println!("{}",buffer
 
 DATASTRUCTURE:
 I should probably parse attacks into vectors as well, as there are a limited number of attacks viable and I am likely to want to be able to output all of a specific attack or the total damage of one particular attack
