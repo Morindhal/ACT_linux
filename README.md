@@ -2,7 +2,7 @@
 
 Depends on having espeak installed for TTS functionality, however should be able to parse without it.
 
-Depends on xorg-dev through the <a href="https://github.com/aweinstock314/rust-clipboard">crate.</a>
+Depends on xorg-dev through the <a href="https://github.com/aweinstock314/rust-clipboard">clipboard crate.</a>
 
 A linux friendly combat parser for EQ2 primarily.
 
