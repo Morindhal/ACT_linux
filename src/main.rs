@@ -3,6 +3,8 @@ extern crate chrono;
 extern crate libc;
 extern crate clap;
 extern crate clipboard;
+extern crate ncurses;
+
 
 
 use regex::{Regex};
@@ -18,6 +20,8 @@ use clap::{Arg};
 use clap::App;
 
 use clipboard::ClipboardContext;
+
+use ncurses::*;
 
 use std::io;
 use std::io::prelude::*;
@@ -54,14 +58,14 @@ fn main()
     let from_file = matches.value_of("FILE").unwrap();
     let player = matches.value_of("player").unwrap();
     let f = File::open(from_file).unwrap();
+
     let mut ctx = ClipboardContext::new().unwrap();
-    /*{
-        Ok(file) => file,
-        Err(e) => 
-        {
-            println!("{}", e);
-        }
-    };*/
+
+    initscr();
+    printw("Welcome to ACT_linux!\n\n\n");
+    refresh();
+    //getch();
+
     let mut encounters: Vec<structs::Encounter> = Vec::new();
     
     let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry)|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
@@ -109,7 +113,7 @@ fn main()
                                                 );
                 if fightdone
                 {
-                    println!("\n\n\n\n\n");
+                    printw("\n\n\n\n\n");
                     encounters.push(structs::Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0, player : String::from(player.clone()) });
                     fightdone = false;
                 }
@@ -130,7 +134,8 @@ fn main()
             if !fightdone
             {
                 encounters.last_mut().unwrap().attackers.sort();
-                println!("{}", encounters.last().unwrap());;
+                printw(&*format!("{}", encounters.last().unwrap()));
+                refresh();
                 match ctx.set_contents(format!("{}", encounters.last().unwrap()))
                 {
                     Ok(_)=>{},
