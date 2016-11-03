@@ -41,6 +41,20 @@ fn speak(data: &CStr) {
     unsafe { system(data.as_ptr()) }
 }
 
+fn ui_header()
+{
+    printw("Welcome to ACT_linux!\n\n\n");
+    refresh();
+}
+
+fn ui_update( body: &str)
+{
+    clear();
+    ui_header();
+    printw(body);
+    refresh();
+}
+
 fn main()
 {
     let matches = App::new("ACT_linux")
@@ -62,8 +76,7 @@ fn main()
     let mut ctx = ClipboardContext::new().unwrap();
 
     initscr();
-    printw("Welcome to ACT_linux!\n\n\n");
-    refresh();
+    ui_header();
     //getch();
 
     let mut encounters: Vec<structs::Encounter> = Vec::new();
@@ -121,6 +134,8 @@ fn main()
                 encounters.last_mut().unwrap().encounter_duration = 0;// encounters.last_mut().unwrap().encounter_start.elapsed();
                 encounters.last_mut().unwrap().encounter_end = parsed_time; //assume every line ends things
                 battle_timer = time::Instant::now();
+                encounters.last_mut().unwrap().attackers.sort();
+                ui_update(&*format!("{}", encounters.last().unwrap()));
                 }};
                 }
             };
@@ -134,8 +149,7 @@ fn main()
             if !fightdone
             {
                 encounters.last_mut().unwrap().attackers.sort();
-                printw(&*format!("{}", encounters.last().unwrap()));
-                refresh();
+                ui_update(&*format!("{}", encounters.last().unwrap()));
                 match ctx.set_contents(format!("{}", encounters.last().unwrap()))
                 {
                     Ok(_)=>{},
