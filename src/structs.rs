@@ -100,7 +100,8 @@ pub struct Encounter
     pub attackers: Vec<Attacker>,
     pub encounter_start: DateTime<UTC>, //timestamp of when the fight started, get this from whatever starts the encounter
     pub encounter_end: DateTime<UTC>, //timestamp of when the fight ended, get this from whatever ends the encounter
-    pub encounter_duration: u64 //duration of the encounter in nanoseconds, divide by 1000 to get seconds
+    pub encounter_duration: u64, //duration of the encounter in nanoseconds, divide by 1000 to get seconds
+    pub player: String
 }
 
 impl Encounter
@@ -119,7 +120,7 @@ impl Encounter
     
     pub fn attack(&mut self, attack_data: regex::Captures)
     {
-        let attacker_name = match attack_data.name("attacker").unwrap() { "" => "Shepherd", var => var};
+        let attacker_name = match attack_data.name("attacker").unwrap() { "" => self.player.as_str(), var => var};
         if self.exists(attacker_name) == -1
         {
             (self.attackers).push(Attacker{attacks: Vec::new(), final_damage: 0, final_healed: 0, name: String::from(attacker_name)});

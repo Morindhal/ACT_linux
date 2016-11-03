@@ -1,6 +1,8 @@
 extern crate regex;
 extern crate chrono;
 extern crate libc;
+extern crate clap;
+extern crate clipboard;
 
 
 use regex::{Regex};
@@ -11,6 +13,11 @@ use chrono::*;
 use libc::system;
 use std::ffi::{CString, CStr};
 use std::os::raw::c_char;
+
+use clap::{Arg};
+use clap::App;
+
+use clipboard::ClipboardContext;
 
 use std::io;
 use std::io::prelude::*;
@@ -32,7 +39,22 @@ fn speak(data: &CStr) {
 
 fn main()
 {
-    let f = File::open("/media/bergman/Games/SteamLibrary/SteamApps/common/EverQuest 2/logs/Maj'Dul//eq2log_Shepherd.txt").unwrap();
+    let matches = App::new("ACT_linux")
+        .version("0.0.1")
+        .author("Bergman. <Morindhal@gmail.com>")
+        .about("Parses EQ2 logs")
+            .arg(Arg::with_name("FILE")
+                .help("Sets the log-file to use")
+                .required(true)
+                .index(1))
+            .arg(Arg::with_name("player")
+                .required(true)
+                .help("Sets the character name to parse, this only catches the YOU and YOUR lines"))
+        .get_matches();
+    let from_file = matches.value_of("FILE").unwrap();
+    let player = matches.value_of("player").unwrap();
+    let f = File::open(from_file).unwrap();
+    let mut ctx = ClipboardContext::new().unwrap();
     /*{
         Ok(file) => file,
         Err(e) => 
@@ -89,7 +111,7 @@ fn main()
                 if fightdone
                 {
                     println!("\n\n\n\n\n");
-                    encounters.push(structs::Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0});
+                    encounters.push(structs::Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0, player : String::from(player.clone()) });
                     fightdone = false;
                 }
                 encounters.last_mut().unwrap().attack(cap);
@@ -110,6 +132,7 @@ fn main()
             {
                 encounters.last_mut().unwrap().attackers.sort();
                 println!("{}", encounters.last().unwrap());
+                ctx.set_contents(format!("{}", encounters.last().unwrap()));
                 fightdone = true;
             }
         }

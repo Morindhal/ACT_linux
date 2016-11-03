@@ -7,3 +7,5 @@ authors = ["Morindhal <Morindhal@gmail.com>"]
 regex = "*"
 chrono = "0.2"
 libc = "*"
+clap = "*"
+clipboard = "0.1.2"
