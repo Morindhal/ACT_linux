@@ -4,6 +4,8 @@ Depends on having espeak installed for TTS functionality, however should be able
 
 Depends on xorg-dev through the <a href="https://github.com/aweinstock314/rust-clipboard">clipboard crate.</a>
 
+Depends on ncurses-dev through the <a href="https://github.com/jeaye/ncurses-rs">ncurses crate.</a>
+
 A linux friendly combat parser for EQ2 primarily.
 
 
