@@ -62,14 +62,13 @@ fn main()
             println!("{}", e);
         }
     };*/
-    //Start a encounter, this code will be moved into the main loop when it works
     let mut encounters: Vec<structs::Encounter> = Vec::new();
     
     let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry)|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
     let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)  (?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
 
     let mut file = BufReader::new(&f);
-    file.seek(SeekFrom::End(-10));
+    file.seek(SeekFrom::End(0));
     
     let mut buffer = String::new();
     let mut battle_timer = time::Instant::now();
@@ -151,17 +150,5 @@ fn main()
 (1478132824)[Thu Nov  3 01:27:04 2016] Devorstator's Impatience heals Devorstator for 43947 hit points.
 
 println!("{}",buffer
-
-DATASTRUCTURE:
-I should probably parse attacks into vectors as well, as there are a limited number of attacks viable and I am likely to want to be able to output all of a specific attack or the total damage of one particular attack
-    This is advanced though so I won't do it for the first iteration of the program.
-
-what I should be able to do:
-
-* printout a full encounter as player dps, sorted by dps.
-** This should be calculated by final damage divided by encounter_time in seconds
-
-* printout a full encounter as player hps, sorted by hps
-** This should be calculated by final healed divided by encounter_time in seconds
 
 */
