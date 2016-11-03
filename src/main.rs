@@ -19,156 +19,10 @@ use std::io::BufReader;
 use std::io::SeekFrom;
 
 use std::fmt;
-use std::cmp::Ordering;
 
 use std::{thread, time};
 
-
-#[derive(Eq)]
-struct Attack
-{
-    damage: u64,
-    victim: String,
-    timestamp: String,
-    crit: String // "" for did not crit?
-}
-
-impl Attack
-{
-    fn attack(&mut self, attack_data: &regex::Captures)
-    {
-        
-    }
-}
-
-impl Ord for Attack
-{
-    fn cmp(&self, other: &Attack) -> Ordering
-    {
-        self.damage.cmp(&other.damage)
-    }
-}
-
-impl PartialOrd for Attack
-{
-    fn partial_cmp(&self, other: &Attack) -> Option<Ordering>
-    {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Attack
-{
-    fn eq(&self, other: &Attack) -> bool
-    {
-        self.damage == other.damage
-    }
-}
-
-#[derive(Eq)]
-struct Attacker
-{
-    attacks: Vec<Attack>,
-    final_damage: u64,
-    final_healed: u64,
-    name: String
-}
-
-impl Ord for Attacker
-{
-    fn cmp(&self, other: &Attacker) -> Ordering
-    {
-        other.final_damage.cmp(&self.final_damage)
-    }
-}
-
-impl PartialOrd for Attacker
-{
-    fn partial_cmp(&self, other: &Attacker) -> Option<Ordering>
-    {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Attacker
-{
-    fn eq(&self, other: &Attacker) -> bool
-    {
-        self.final_damage == other.final_damage
-    }
-}
-
-impl Attacker
-{
-    fn attack(&mut self, attack_data: &regex::Captures)
-    {
-        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), crit: String::from(attack_data.name("crittype").unwrap())});
-        self.final_damage += attack_data.name("damage").unwrap().parse::<u64>().unwrap();
-    }
-    
-    fn print(&self, encounter_duration : u64) -> String
-    {
-        let dps = match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  };
-        let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000000.0  };
-        format!("{name:.*} \t  {dps:.2}m DPS\t{hps}k HPS\t", 4, name=self.name, dps=dps, hps=hps)
-    }
-}
-
-struct Encounter
-{
-    attackers: Vec<Attacker>,
-    encounter_start: DateTime<UTC>, //timestamp of when the fight started, get this from whatever starts the encounter
-    encounter_end: DateTime<UTC>, //timestamp of when the fight ended, get this from whatever ends the encounter
-    encounter_duration: u64 //duration of the encounter in nanoseconds, divide by 1000 to get seconds
-}
-
-impl Encounter
-{
-    fn exists(&self, name:&str) -> i32
-    {
-        for i in 0..((self.attackers).len())
-        {
-            if ((self.attackers))[i].name == name
-            {
-                return  i as i32;
-            }
-        }
-        return -1;
-    }
-    
-    fn attack(&mut self, attack_data: regex::Captures)
-    {
-        let attacker_name = match attack_data.name("attacker").unwrap() { "" => "Shepherd", var => var};
-        if self.exists(attacker_name) == -1
-        {
-            (self.attackers).push(Attacker{attacks: Vec::new(), final_damage: 0, final_healed: 0, name: String::from(attacker_name)});
-        }
-        {
-            let attackers_len = self.exists(attacker_name) as usize;
-            self.attackers[attackers_len].attack(&attack_data);
-        }
-    }
-    
-    fn order(&mut self)
-    {
-        
-    }
-}
-
-
-impl fmt::Display for Encounter
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {;
-        let duration = (self.encounter_end-self.encounter_start);
-        write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
-        for i in 0..((self.attackers).len())
-        {
-            write!(f, "{}\n", ((self.attackers))[i].print( duration.num_seconds() as u64 ));
-        }
-        write!(f, "\n")
-    }
-}
+mod structs;
 
 fn speak(data: &CStr) {
     extern { fn system(data: *const c_char); }
@@ -187,7 +41,7 @@ fn main()
         }
     };*/
     //Start a encounter, this code will be moved into the main loop when it works
-    let mut encounters: Vec<Encounter> = Vec::new();
+    let mut encounters: Vec<structs::Encounter> = Vec::new();
     
     let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry)|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
     let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)  (?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
@@ -235,7 +89,7 @@ fn main()
                 if fightdone
                 {
                     println!("\n\n\n\n\n");
-                    encounters.push(Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0});
+                    encounters.push(structs::Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0});
                     fightdone = false;
                 }
                 encounters.last_mut().unwrap().attack(cap);
