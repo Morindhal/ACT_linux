@@ -96,6 +96,16 @@ impl Attacker
         //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
         format!("{name:.*}: {dps:.1}m ", 4, name=self.name, dps=dps)
     }
+
+    /*This should probably be replaced by a impl fmt::Debug*/
+    pub fn print_full(&self, encounter_duration : u64) -> String
+    {
+        let dps = match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  };
+        /*Leave this commented until heals are parsed*/
+        //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
+        //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
+        format!("{name}: {dps:.3}m ", name=self.name, dps=dps)
+    }
 }
 
 pub struct Encounter
@@ -140,6 +150,19 @@ impl Encounter
     }
 }
 
+impl fmt::Debug for Encounter
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {;
+        let duration = (self.encounter_end-self.encounter_start);
+        write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
+        for i in 0..((self.attackers).len())
+        {
+            write!(f, "{}\n", ((self.attackers))[i].print_full( duration.num_seconds() as u64 ));
+        }
+        write!(f, "")
+    }
+}
 
 impl fmt::Display for Encounter
 {
@@ -151,6 +174,6 @@ impl fmt::Display for Encounter
         {
             write!(f, "{}\n", ((self.attackers))[i].print( duration.num_seconds() as u64 ));
         }
-        write!(f, "\n")
+        write!(f, "")
     }
 }

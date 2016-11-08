@@ -1,3 +1,5 @@
+#![feature(insert_str)]
+
 extern crate regex;
 extern crate chrono;
 extern crate libc;
@@ -5,7 +7,8 @@ extern crate clap;
 extern crate clipboard;
 extern crate ncurses;
 
-
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, RecvTimeoutError};
 
 use regex::{Regex};
 use std::collections::HashMap;
@@ -35,25 +38,93 @@ use std::{thread, time};
 
 mod structs;
 
+static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
+
 fn speak(data: &CStr) {
     extern { fn system(data: *const c_char); }
 
     unsafe { system(data.as_ptr()) }
 }
 
-fn ui_header()
+
+fn ui_update( body: &str, highlight: &str, pointer: (i32,i32))
 {
-    printw("Welcome to ACT_linux!\n\n\n");
-    refresh();
+    let tvec = vec!["Blubb", "blubbing", "Blibbiest!"];
+    let mut max_x = 0;
+    let mut max_y = 0;
+    getmaxyx(stdscr(), &mut max_y, &mut max_x);
+
+    //let mut start_y = (max_y - WINDOW_HEIGHT) / 2;            
+    //let mut start_x = (max_x - WINDOW_WIDTH) / 2;
+    //let mut win = create_win(start_y, start_x);
+
+
+    let mut main_win = newwin(max_y-22, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
+    let mut header_win = newwin(20, max_x, 0, 0);
+    let mut encounter_win = newwin(max_y-22, ENCOUNTER_WINDOW_WIDTH, 20, 0);
+
+    wclear(main_win);
+    wclear(header_win);
+    wclear(encounter_win);
+
+    //wborder(main_win, '|' as chtype, '-' as chtype, '_' as chtype, '|' as chtype, '|' as chtype, '|' as chtype, '|' as chtype, '|' as chtype);
+    //printw(format!(""));
+    wmove(header_win, 1, 1);
+    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\n");
+
+    wmove(main_win, 1, 1);
+    attron(A_BOLD());
+    wprintw(main_win, "\tEncounters:\n\n");
+    attroff(A_BOLD());
+    for line in body.lines()
+    {
+        if line.contains(highlight)
+        {
+            attron(COLOR_PAIR(1));
+            wprintw(main_win, &format!(" [ ]{}", line));
+            attroff(COLOR_PAIR(1));
+        }
+        else
+        {
+            wprintw(main_win, &format!(" [ ]{}", line));
+        }
+        wprintw(main_win, "\n");
+    }
+    
+    for i in 0..tvec.len()
+    {
+        mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]{}", tvec[i]));
+    }
+
+    wborder(main_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+    wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+    wborder(encounter_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+
+    wrefresh(main_win);
+    wrefresh(header_win);
+    wrefresh(encounter_win);
+
+    if pointer.1 == 0
+    {
+        wmove(encounter_win, 1+pointer.0, 2);
+        waddch(encounter_win, 'X' as chtype);
+        wmove(encounter_win, 1+pointer.0, 2);
+        wrefresh(encounter_win);
+    }
+    else if pointer.1 == 1
+    {
+        //inspect encounter, mark individual attackers
+        wmove(main_win, 3+pointer.0, 2);
+        waddch(main_win, 'X' as chtype);
+        wmove(main_win, 3+pointer.0, 2);
+        wrefresh(main_win);
+    }
+
+    delwin(main_win);
+    delwin(header_win);
+    delwin(encounter_win);
 }
 
-fn ui_update( body: &str)
-{
-    clear();
-    ui_header();
-    printw(body);
-    refresh();
-}
 
 fn main()
 {
@@ -72,29 +143,135 @@ fn main()
     /*Set log-file and player whos view the combat is parsed from based on CL input, player should be replaced with a name collected from the file-string*/
     let from_file = matches.value_of("FILE").unwrap();
     let player = matches.value_of("player").unwrap();
+    let player_display = String::from(player);
     let f = File::open(from_file).unwrap();
-
-    let mut ctx = ClipboardContext::new().unwrap();
-
-    /*start the n-curses UI*/
-    initscr();
-    ui_header();
-    //getch();
-
-    let mut encounters: Vec<structs::Encounter> = Vec::new();
     
     let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack))|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
     let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)  (?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
-
     let mut file = BufReader::new(&f);
     /*jump to the end of the file, negative value here will go to the nth character before the end of file.. Positive values are not encouraged.*/
     file.seek(SeekFrom::End(0));
+
+
+
+    /*start the n-curses UI*/
+    initscr();
+    keypad(stdscr(), true);
+    noecho();
+    start_color();
+    init_pair(1, COLOR_RED, COLOR_BLACK);
     
+    ui_update(" ", player, (0,0));
+
+    //getch();
+
+    let mut encounterss = Arc::new(Mutex::new(Vec::new()));
+    let (parse_tx, main_rx) = mpsc::channel::<Box<(u64,String)>>();
+    let (user_tx, mainss_rx) = mpsc::channel();
+
     let mut buffer = String::new();
     let mut battle_timer = time::Instant::now();
     let mut ui_update_timer = time::Instant::now();
     let mut fightdone = true;
-    'main: loop
+    
+    
+    let buttonlistener = thread::spawn(move || 
+    {
+        'input: loop/*Listen to input, send input to main*/
+        {
+            user_tx.send(getch()).unwrap();
+        }
+    });
+    
+
+    let ui = thread::spawn(move ||
+    {
+        let mut ctx = ClipboardContext::new().unwrap();
+        let timeout = time::Duration::from_millis(10);
+        let mut before_last = String::from("");
+        let mut last_fight = String::from("");
+        let mut encounter_counter: u64 = 0;
+        let mut pointer: (i32, i32) = (0, 0);
+        'ui: loop
+        {
+            match main_rx.recv_timeout(timeout)
+            {
+                Ok(val) => 
+                {
+                    if encounter_counter < val.0
+                    {
+                        encounter_counter += 1;
+                        before_last = last_fight;
+                    }
+                    last_fight = val.1;
+                    ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), (0,0));
+                },
+                Err(e) => {}
+            }
+            match mainss_rx.recv_timeout(timeout)
+            {
+                Ok(val) => match val //ui_update(format!("{}",val).as_str())    <-- to find specific keys
+                    {
+                        27 => {endwin();std::process::exit(1);},
+                        99 => 
+                            match ctx.set_contents(format!("{}", before_last))
+                            {
+                                Ok(_)=>
+                                {
+                                    /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
+                                    speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                },
+                                Err(e)=>{println!("Clipboard error: {}", e);}
+                            },
+                        67 => 
+                            match ctx.set_contents(format!("{}", last_fight))
+                            {
+                                Ok(_)=>
+                                {
+                                    /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
+                                    speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                },
+                                Err(e)=>{println!("Clipboard error: {}", e);}
+                            },
+                        KEY_UP => 
+                        {
+                            if pointer.0>0
+                            {
+                                pointer.0-=1;
+                                ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                            }
+                        },
+                        KEY_DOWN => 
+                        {//if pointer.0 < encounters.len()
+                            pointer.0+=1;
+                            ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                        },
+                        KEY_LEFT => 
+                        {
+                            if pointer.1 == 1
+                            {
+                                pointer.1 = 0;
+                                ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                            }
+                        },
+                        KEY_RIGHT => 
+                        {
+                            if pointer.1 == 0
+                            {
+                                pointer.1 = 1;
+                                ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                            }
+                        },
+                        _ => {}
+                    },
+                Err(e) => {}
+            }
+        }
+    });
+
+    let mut encounter_counter: u64 = 0;
+    let mut encounters = encounterss.lock().unwrap();
+    'parser: loop/*Parse file, send results to main every X secs*/
     {
         buffer.clear();
         if file.read_line(&mut buffer).unwrap() > 0
@@ -152,7 +329,8 @@ fn main()
         {
             ui_update_timer = time::Instant::now();
             encounters.last_mut().unwrap().attackers.sort();
-            ui_update(&*format!("{}{}", encounters[match encounters.len() {val => if val == 0 || val == 1 {0} else {val-2}}], encounters.last().unwrap()));
+            parse_tx.send(Box::new((encounter_counter, format!("{:?}", encounters.last().unwrap()))));
+            //ui_update(&*format!("{}{}", encounters[match encounters.len() {val => if val == 0 || val == 1 {0} else {val-2}}], encounters.last().unwrap()));
         }
         /*End current encounter if nothing has been parsed in combat within the last 3 secs*/
         if battle_timer.elapsed() >= time::Duration::from_millis(3000)
@@ -160,16 +338,9 @@ fn main()
             if !fightdone
             {
                 encounters.last_mut().unwrap().attackers.sort();
-                ui_update(&*format!("{}{}", encounters[match encounters.len() {val => if val == 0 || val == 1 {0} else {val-2}}], encounters.last().unwrap()));
-                match ctx.set_contents(format!("{}", encounters.last().unwrap()))
-                {
-                    Ok(_)=>
-                    {
-                        /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
-                        speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                    },
-                    Err(e)=>{println!("Clipboard error: {}", e);}
-                }
+                parse_tx.send(Box::new((encounter_counter, format!("{:?}", encounters.last().unwrap()))));
+                encounter_counter += 1;
+                //ui_update(&*format!("{}{}", encounters[match encounters.len() {val => if val == 0 || val == 1 {0} else {val-2}}], encounters.last().unwrap()));
                 fightdone = true;
             }
         }
