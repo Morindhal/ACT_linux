@@ -7,6 +7,7 @@ extern crate clap;
 extern crate clipboard;
 extern crate ncurses;
 
+use std::mem;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{self, RecvTimeoutError};
 
@@ -47,16 +48,11 @@ fn speak(data: &CStr) {
 }
 
 
-fn ui_update( body: &str, highlight: &str, pointer: (i32,i32))
+fn ui_update( body: &str, highlight: &str, pointer: &(i32,i32,bool,i32,bool,i32), encounters: &Vec<structs::Encounter>, current_encounter: &structs::Encounter)
 {
-    let tvec = vec!["Blubb", "blubbing", "Blibbiest!"];
     let mut max_x = 0;
     let mut max_y = 0;
     getmaxyx(stdscr(), &mut max_y, &mut max_x);
-
-    //let mut start_y = (max_y - WINDOW_HEIGHT) / 2;            
-    //let mut start_x = (max_x - WINDOW_WIDTH) / 2;
-    //let mut win = create_win(start_y, start_x);
 
 
     let mut main_win = newwin(max_y-22, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
@@ -67,34 +63,59 @@ fn ui_update( body: &str, highlight: &str, pointer: (i32,i32))
     wclear(header_win);
     wclear(encounter_win);
 
-    //wborder(main_win, '|' as chtype, '-' as chtype, '_' as chtype, '|' as chtype, '|' as chtype, '|' as chtype, '|' as chtype, '|' as chtype);
-    //printw(format!(""));
+    
     wmove(header_win, 1, 1);
-    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\n");
+    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tEnter/Backspace to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\n");
 
-    wmove(main_win, 1, 1);
-    attron(A_BOLD());
-    wprintw(main_win, "\tEncounters:\n\n");
-    attroff(A_BOLD());
-    for line in body.lines()
+    let mut draw: String;
+    if !encounters.is_empty() && pointer.0 as usize >= 0 && encounters.len() > pointer.0 as usize
     {
-        if line.contains(highlight)
+        if pointer.1 == 0
         {
-            attron(COLOR_PAIR(1));
-            wprintw(main_win, &format!(" [ ]{}", line));
-            attroff(COLOR_PAIR(1));
+            draw = format!(" {:?}\n", encounters[pointer.0 as usize]);
+        }
+        else if pointer.1 == 1 && pointer.4
+        {
+            draw = format!(" {} attacks:\n {}\n", encounters[pointer.0 as usize].attackers[pointer.3 as usize].name, encounters[pointer.0 as usize].attackers[pointer.3 as usize]);
+        }
+        else if pointer.1 == 1 && !pointer.4
+        {
+            draw = format!(" {:?}\n", encounters[pointer.0 as usize]);
         }
         else
         {
-            wprintw(main_win, &format!(" [ ]{}", line));
+            draw = format!("{}.", body);
         }
-        wprintw(main_win, "\n");
+    }
+    else
+    {
+        draw = String::from(body);
+    }
+    wmove(main_win, 1, 1);
+    wattron(main_win, A_BOLD());
+    wprintw(main_win, "\tEncounters:\n\n");
+    wattroff(main_win, A_BOLD());
+    for line in draw.lines()
+    {
+        if line.contains(highlight)
+        {
+            wattron(main_win, COLOR_PAIR(1));
+            wprintw(main_win, &if pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
+            wattroff(main_win, COLOR_PAIR(1));
+        }
+        else
+        {
+            wprintw(main_win, &if pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
+        }
     }
     
-    for i in 0..tvec.len()
+    for i in 0..encounters.len()
     {
-        mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]{}", tvec[i]));
+        mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
     }
+    wattron(encounter_win, COLOR_PAIR(1));
+    mvwprintw(encounter_win, encounters.len() as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", current_encounter.encounter_duration/60, current_encounter.encounter_duration % 60 ));
+    wattroff(encounter_win, COLOR_PAIR(1));
 
     wborder(main_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
@@ -104,19 +125,23 @@ fn ui_update( body: &str, highlight: &str, pointer: (i32,i32))
     wrefresh(header_win);
     wrefresh(encounter_win);
 
-    if pointer.1 == 0
+
+    wmove(encounter_win, 1+pointer.0, 2);
+    if pointer.2
     {
-        wmove(encounter_win, 1+pointer.0, 2);
         waddch(encounter_win, 'X' as chtype);
         wmove(encounter_win, 1+pointer.0, 2);
-        wrefresh(encounter_win);
     }
-    else if pointer.1 == 1
+    wrefresh(encounter_win);
+    if pointer.1 == 1
     {
         //inspect encounter, mark individual attackers
-        wmove(main_win, 3+pointer.0, 2);
-        waddch(main_win, 'X' as chtype);
-        wmove(main_win, 3+pointer.0, 2);
+        wmove(main_win, 4+pointer.3, 2);
+        if pointer.4
+        {
+            waddch(main_win, 'X' as chtype);
+            wmove(main_win, 4+pointer.5, 2);
+        }
         wrefresh(main_win);
     }
 
@@ -146,7 +171,7 @@ fn main()
     let player_display = String::from(player);
     let f = File::open(from_file).unwrap();
     
-    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack))|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
+    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU | )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
     let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)  (?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
     let mut file = BufReader::new(&f);
     /*jump to the end of the file, negative value here will go to the nth character before the end of file.. Positive values are not encouraged.*/
@@ -160,19 +185,16 @@ fn main()
     noecho();
     start_color();
     init_pair(1, COLOR_RED, COLOR_BLACK);
-    
-    ui_update(" ", player, (0,0));
 
-    //getch();
 
-    let mut encounterss = Arc::new(Mutex::new(Vec::new()));
-    let (parse_tx, main_rx) = mpsc::channel::<Box<(u64,String)>>();
+    let (parse_tx, main_rx) = mpsc::channel::<Box<(bool,structs::Encounter)>>();
     let (user_tx, mainss_rx) = mpsc::channel();
 
     let mut buffer = String::new();
     let mut battle_timer = time::Instant::now();
     let mut ui_update_timer = time::Instant::now();
     let mut fightdone = true;
+    let dummy_time = UTC.ymd(2016, 2, 3).and_hms(0, 0, 0);
     
     
     let buttonlistener = thread::spawn(move || 
@@ -188,33 +210,41 @@ fn main()
     {
         let mut ctx = ClipboardContext::new().unwrap();
         let timeout = time::Duration::from_millis(10);
-        let mut before_last = String::from("");
-        let mut last_fight = String::from("");
-        let mut encounter_counter: u64 = 0;
-        let mut pointer: (i32, i32) = (0, 0);
+        let mut pointer: (i32, i32, bool, i32, bool, i32) = (0, 0, false, 0, false, 0);
+        let mut encounters: Vec<structs::Encounter> = Vec::new();
+        let mut current_encounter: structs::Encounter = structs::Encounter{attackers: Vec::new(), encounter_start: dummy_time, encounter_end: dummy_time, encounter_duration : 0, player : String::from(player_display.clone()) };
+        ui_update("", &player_display, &pointer, &encounters, &current_encounter);
         'ui: loop
         {
             match main_rx.recv_timeout(timeout)
             {
                 Ok(val) => 
                 {
-                    if encounter_counter < val.0
+                    
+                    if val.0
                     {
-                        encounter_counter += 1;
-                        before_last = last_fight;
+                        encounters.push(current_encounter.clone());
                     }
-                    last_fight = val.1;
-                    ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), (0,0));
+                    if !pointer.2
+                    {
+                        pointer.0 = encounters.len() as i32;
+                    }
+                    current_encounter = val.1;
+                    ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                 },
                 Err(e) => {}
             }
             match mainss_rx.recv_timeout(timeout)
             {
-                Ok(val) => match val //ui_update(format!("{}",val).as_str())    <-- to find specific keys
+                Ok(val) => match val
                     {
-                        27 => {endwin();std::process::exit(1);},
-                        99 => 
-                            match ctx.set_contents(format!("{}", before_last))
+                        27 => // escape
+                        {
+                            endwin();
+                            std::process::exit(1);
+                        },
+                        99 =>  // C
+                            match ctx.set_contents(format!("{}", current_encounter))
                             {
                                 Ok(_)=>
                                 {
@@ -223,8 +253,8 @@ fn main()
                                 },
                                 Err(e)=>{println!("Clipboard error: {}", e);}
                             },
-                        67 => 
-                            match ctx.set_contents(format!("{}", last_fight))
+                        67 => // c
+                            match ctx.set_contents(format!("{}", encounters.last().unwrap()))
                             {
                                 Ok(_)=>
                                 {
@@ -235,34 +265,89 @@ fn main()
                             },
                         KEY_UP => 
                         {
-                            if pointer.0>0
+                            if pointer.1 == 0 && !pointer.4
                             {
-                                pointer.0-=1;
-                                ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                                if pointer.0>0
+                                {
+                                    pointer.0-=1;
+                                }
                             }
+                            else if pointer.1 == 1 && !pointer.4
+                            {
+                                if pointer.3>0
+                                {
+                                    pointer.3-=1;
+                                }
+                            }
+                            else if pointer.4
+                            {
+                                if pointer.5>0
+                                {
+                                    pointer.5-=1;
+                                }
+                            }
+                            ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                         },
                         KEY_DOWN => 
-                        {//if pointer.0 < encounters.len()
-                            pointer.0+=1;
-                            ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                        {
+                            if pointer.1 == 0
+                            {
+                                if pointer.0 < encounters.len() as i32
+                                {
+                                    pointer.0+=1;
+                                }
+                            }
+                            else if pointer.1 == 1 && pointer.3 < encounters[pointer.0 as usize].attackers.len() as i32 -1  && !pointer.4
+                            {
+                                pointer.3+=1
+                            }
+                            else if pointer.4
+                            {
+                                pointer.5+=1;
+                            }
+                                ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                         },
                         KEY_LEFT => 
                         {
-                            if pointer.1 == 1
+                            if pointer.1 == 1 && pointer.2 && !pointer.4
                             {
                                 pointer.1 = 0;
-                                ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                                ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                             }
                         },
                         KEY_RIGHT => 
                         {
-                            if pointer.1 == 0
+                            if pointer.1 == 0 && pointer.2
                             {
                                 pointer.1 = 1;
-                                ui_update(&format!("{}{}", before_last, last_fight), player_display.as_str(), pointer);
+                                pointer.3 = 0;
+                                ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                             }
                         },
-                        _ => {}
+                        10 => // enter
+                        {
+                            if pointer.2 && pointer.1 == 1
+                            {
+                                pointer.4 = true;
+                                pointer.5 = 0;
+                            }
+                            pointer.2=true;
+                            ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
+                        },
+                        KEY_BACKSPACE =>
+                        {
+                            if pointer.4
+                            {
+                                pointer.4 = false;
+                            }
+                            else
+                            {
+                                pointer.2 = false;
+                                pointer.1 = 0;
+                            }
+                            ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
+                        },
+                        _ => {}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//ui_update(&format!("{}", val), &player_display, &pointer, &encounters, &current_encounter);}
                     },
                 Err(e) => {}
             }
@@ -270,78 +355,78 @@ fn main()
     });
 
     let mut encounter_counter: u64 = 0;
-    let mut encounters = encounterss.lock().unwrap();
+    let mut encounter: structs::Encounter = structs::Encounter{attackers: Vec::new(), encounter_start: dummy_time, encounter_end: dummy_time, encounter_duration : 0, player : String::from(player.clone()) };
     'parser: loop/*Parse file, send results to main every X secs*/
     {
-        buffer.clear();
-        if file.read_line(&mut buffer).unwrap() > 0
+        'encounter_loop: loop
         {
-            /*Spawn a seperate thread to deal with the triggers*/
-            let triggerbuffer = buffer.clone();
-            thread::spawn( move || 
+            buffer.clear();
+            if file.read_line(&mut buffer).unwrap() > 0
             {
-                /*The container for the triggers, the key is what the tts should say, the value is the regex that is matched.*/
-                let mut triggers: HashMap<&str, Regex> = HashMap::new();
-                    triggers.insert("Ruling I am", Regex::new(r".*I rule.*").unwrap());
-                    triggers.insert("Verily", Regex::new(r".*i also rule.*").unwrap());
-                for (trigger, trigged) in triggers.iter()
+                /*Spawn a seperate thread to deal with the triggers*/
+                let triggerbuffer = buffer.clone();
+                thread::spawn( move || 
                 {
-                    match trigged.captures(triggerbuffer.as_str()) {None => {}, Some(cap) =>
+                    /*The container for the triggers, the key is what the tts should say, the value is the regex that is matched.*/
+                    let mut triggers: HashMap<&str, Regex> = HashMap::new();
+                        triggers.insert("Ruling I am", Regex::new(r".*I rule.*").unwrap());
+                        triggers.insert("Verily", Regex::new(r".*i also rule.*").unwrap());
+                    for (trigger, trigged) in triggers.iter()
                     {
-                        speak(&CString::new(format!("espeak \"{}\"", trigger)).unwrap());
+                        match trigged.captures(triggerbuffer.as_str()) {None => {}, Some(cap) =>
+                        {
+                            speak(&CString::new(format!("espeak \"{}\"", trigger)).unwrap());
+                        }};
+                    }
+                });
+                match re.captures(buffer.as_str()) {None => {/*println!("{}",buffer)*/}, Some(cap) =>
+                {
+                    match timeparser.captures(cap.name("datetime").unwrap()) {None => {}, Some(time_cap) =>
+                    {
+                        let parsed_time = UTC
+                                                .ymd(
+                                                    time_cap.name("year").unwrap().parse::<i32>().unwrap(),
+                                                    match time_cap.name("month").unwrap() {"Jan"=>0, "Feb"=>1, "Mar"=>2, "Apr"=>3,  "May"=>4, "Jun"=>5, "Jul"=>6, "Aug"=>7, "Sep"=>8, "Oct"=>9, "Nov"=>10, "Dec"=>11, _=>0},
+                                                    time_cap.name("day_month").unwrap().parse::<u32>().unwrap())
+                                                .and_hms(
+                                                    time_cap.name("hour").unwrap().parse::<u32>().unwrap(),
+                                                    time_cap.name("minute").unwrap().parse::<u32>().unwrap(),
+                                                    time_cap.name("second").unwrap().parse::<u32>().unwrap()
+                                                    );
+                        if fightdone
+                        {
+                            encounter = structs::Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0, player : String::from(player.clone()) };
+                            fightdone = false;
+                        }
+                        encounter.attack(cap);
+                        encounter.encounter_end = parsed_time; //assume every line ends the encounter, likely not optimal, needs to be overhauled
+                        encounter.encounter_duration = (encounter.encounter_end-encounter.encounter_start).num_seconds() as u64;
+                        battle_timer = time::Instant::now();
                     }};
-                }
-            });
-            match re.captures(buffer.as_str()) {None => {}, Some(cap) =>
-            {
-                match timeparser.captures(cap.name("datetime").unwrap()) {None => {}, Some(time_cap) =>
-                {
-                    let parsed_time = UTC
-                                            .ymd(
-                                                time_cap.name("year").unwrap().parse::<i32>().unwrap(),
-                                                match time_cap.name("month").unwrap() {"Jan"=>0, "Feb"=>1, "Mar"=>2, "Apr"=>3,  "May"=>4, "Jun"=>5, "Jul"=>6, "Aug"=>7, "Sep"=>8, "Oct"=>9, "Nov"=>10, "Dec"=>11, _=>0},
-                                                time_cap.name("day_month").unwrap().parse::<u32>().unwrap())
-                                            .and_hms(
-                                                time_cap.name("hour").unwrap().parse::<u32>().unwrap(),
-                                                time_cap.name("minute").unwrap().parse::<u32>().unwrap(),
-                                                time_cap.name("second").unwrap().parse::<u32>().unwrap()
-                                                );
-                if fightdone
-                {
-                    printw("\n\n\n\n\n");
-                    encounters.push(structs::Encounter{ attackers: Vec::new(), encounter_start: parsed_time, encounter_end: parsed_time, encounter_duration : 0, player : String::from(player.clone()) });
-                    fightdone = false;
-                }
-                    encounters.last_mut().unwrap().attack(cap);
-                    encounters.last_mut().unwrap().encounter_duration = 0;// encounter_duration is not currently used, will probably be when history parsing gets done
-                    encounters.last_mut().unwrap().encounter_end = parsed_time; //assume every line ends the encounter, likely not optimal, needs to be overhauled
-                    battle_timer = time::Instant::now();
                 }};
-                }
-            };
-        }
-        else /*Sleep for 0.1 sec if nothing has happened in the log-file*/
-        {
-            thread::sleep(time::Duration::from_millis(100));
-        }
-        /*update the UI, only once every 1 sec*/
-        if !fightdone && ui_update_timer.elapsed() >= time::Duration::from_millis(1000)
-        {
-            ui_update_timer = time::Instant::now();
-            encounters.last_mut().unwrap().attackers.sort();
-            parse_tx.send(Box::new((encounter_counter, format!("{:?}", encounters.last().unwrap()))));
-            //ui_update(&*format!("{}{}", encounters[match encounters.len() {val => if val == 0 || val == 1 {0} else {val-2}}], encounters.last().unwrap()));
-        }
-        /*End current encounter if nothing has been parsed in combat within the last 3 secs*/
-        if battle_timer.elapsed() >= time::Duration::from_millis(3000)
-        {
-            if !fightdone
+            }
+            else /*Sleep for 0.1 sec if nothing has happened in the log-file*/
             {
-                encounters.last_mut().unwrap().attackers.sort();
-                parse_tx.send(Box::new((encounter_counter, format!("{:?}", encounters.last().unwrap()))));
-                encounter_counter += 1;
-                //ui_update(&*format!("{}{}", encounters[match encounters.len() {val => if val == 0 || val == 1 {0} else {val-2}}], encounters.last().unwrap()));
-                fightdone = true;
+                thread::sleep(time::Duration::from_millis(100));
+            }
+            /*update the UI, once every 1 sec*/
+            if !fightdone && ui_update_timer.elapsed() >= time::Duration::from_millis(1000)
+            {
+                ui_update_timer = time::Instant::now();
+                encounter.attackers.sort();
+                parse_tx.send(Box::new((false, encounter.clone())));
+            }
+            /*End current encounter if nothing has been parsed in combat within the last 3 secs*/
+            if battle_timer.elapsed() >= time::Duration::from_millis(3000)
+            {
+                if !fightdone
+                {
+                    encounter.attackers.sort();
+                    parse_tx.send(Box::new((true, encounter.clone())));
+                    encounter_counter += 1;
+                    fightdone = true;
+                    break 'encounter_loop;
+                }
             }
         }
     }

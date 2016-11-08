@@ -5,12 +5,13 @@ use std::fmt;
 use std::{thread, time};
 use chrono::*;
 
-#[derive(Eq)]
+#[derive(Eq, Clone)]
 pub struct Attack
 {
     damage: u64,
     victim: String,
     timestamp: String,
+    attack_name: String,
     crit: String // "" for did not crit?
 }
 
@@ -46,13 +47,23 @@ impl PartialEq for Attack
     }
 }
 
+impl fmt::Display for Attack
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        //write!(f, "{}\t\t{}\t{}\t{}", self.victim, self.attack_name, self.crit, self.damage)
+        write!(f, "{}", self.attack_name)
+    }
+}
+
+
 #[derive(Eq)]
 pub struct Attacker
 {
     attacks: Vec<Attack>,
     final_damage: u64,
     final_healed: u64,
-    name: String
+    pub name: String
 }
 
 impl Ord for Attacker
@@ -83,7 +94,7 @@ impl Attacker
 {
     pub fn attack(&mut self, attack_data: &regex::Captures)
     {
-        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), crit: String::from(attack_data.name("crittype").unwrap())});
+        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), attack_name: String::from(attack_data.name("attack").unwrap()), crit: String::from(attack_data.name("crittype").unwrap())});
         self.final_damage += attack_data.name("damage").unwrap().parse::<u64>().unwrap();
     }
     
@@ -107,6 +118,24 @@ impl Attacker
         format!("{name}: {dps:.3}m ", name=self.name, dps=dps)
     }
 }
+
+impl Clone for Attacker
+{
+    fn clone(&self) -> Attacker{ Attacker{attacks: self.attacks.clone(), final_damage: self.final_damage, final_healed: self.final_healed, name: self.name.clone()} }
+}
+
+impl fmt::Display for Attacker
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        for i in 0..((self.attacks).len())
+        {
+            write!(f, "{}\n", ((self.attacks))[i]);
+        }
+        write!(f, "")
+    }
+}
+
 
 pub struct Encounter
 {
@@ -153,7 +182,7 @@ impl Encounter
 impl fmt::Debug for Encounter
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {;
+    {
         let duration = (self.encounter_end-self.encounter_start);
         write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
         for i in 0..((self.attackers).len())
@@ -167,7 +196,7 @@ impl fmt::Debug for Encounter
 impl fmt::Display for Encounter
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {;
+    {
         let duration = (self.encounter_end-self.encounter_start);
         write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
         for i in 0..((self.attackers).len())
@@ -176,4 +205,9 @@ impl fmt::Display for Encounter
         }
         write!(f, "")
     }
+}
+
+impl Clone for Encounter
+{
+    fn clone(&self) -> Encounter{ Encounter{attackers: self.attackers.clone(), encounter_start: self.encounter_start.clone(), encounter_end: self.encounter_end.clone(), encounter_duration: self.encounter_duration, player: self.player.clone()} }
 }
