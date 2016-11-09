@@ -6,7 +6,7 @@ Depends on xorg-dev through the <a href="https://github.com/aweinstock314/rust-c
 
 Depends on ncurses-dev through the <a href="https://github.com/jeaye/ncurses-rs">ncurses crate.</a>
 
-A linux friendly combat parser for EQ2 primarily.
+A linux friendly combat parser primarily for EQ2.
 
 
 
@@ -17,13 +17,13 @@ Left to do:
 
 *HPS parsing, parse heal numbers, the regex cannot yet catch the heals/wards keywords from the log.
 
-*UI, create a navigable UI, use <a href="https://github.com/jeaye/ncurses-rs">ncurses-rs</a> for this.
-
-  *The UI is a huge thing left to do and will need several lesser tasks. (placeholder text)
-
 *Read triggers from file and save triggers to file.
 
 *Read triggers from the log and place them into a file. (look into Advanced Combat Trackers xml format to possibly make this program compatible.
+
+*Add the possibility to filter the data displayed when inspecting a encounter.
+
+*Add the possibility to scroll, both in the encounter_win and main_win if the displayed text doesn't fit in that windows height, currently only shows the number of lines that fit.
 
 
 This is very much a work in progress.
