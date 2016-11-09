@@ -254,15 +254,20 @@ fn main()
                                 Err(e)=>{println!("Clipboard error: {}", e);}
                             },
                         67 => // c
-                            match ctx.set_contents(format!("{}", encounters.last().unwrap()))
+                        {
+                            if !encounters.is_empty()
                             {
-                                Ok(_)=>
+                                match ctx.set_contents(format!("{}", encounters.last().unwrap()))
                                 {
-                                    /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
-                                    speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                                },
-                                Err(e)=>{println!("Clipboard error: {}", e);}
-                            },
+                                    Ok(_)=>
+                                    {
+                                        /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
+                                        speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                    },
+                                    Err(e)=>{println!("Clipboard error: {}", e);}
+                                }
+                            }
+                        },
                         KEY_UP => 
                         {
                             if pointer.1 == 0 && !pointer.4
