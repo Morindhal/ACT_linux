@@ -116,13 +116,16 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
         }
     }
     
-    for i in 0..(encounters.len()-1)
+    if !encounters.is_empty()
     {
-        mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
+        for i in 0..(encounters.len()-1)
+        {
+            mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
+        }
+        wattron(encounter_win, COLOR_PAIR(1));
+        mvwprintw(encounter_win, encounters.len() as i32, 1, &format!("[ ]Duration: {}:{}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
+        wattroff(encounter_win, COLOR_PAIR(1));
     }
-    wattron(encounter_win, COLOR_PAIR(1));
-    mvwprintw(encounter_win, encounters.len() as i32, 1, &format!("[ ]Duration: {}:{}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
-    wattroff(encounter_win, COLOR_PAIR(1));
 
     wborder(main_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
@@ -225,7 +228,6 @@ fn main()
         let timeout = time::Duration::from_millis(10);
         let mut ui_data = structs::ui_data{pointer: (0, 0, false, 0, false, 0), filters: String::from(""), trigger_pointer: (0, 0), filter_lock: false};
         let mut encounters: Vec<structs::Encounter> = Vec::new();
-        encounters.push(structs::Encounter{attackers: Vec::new(), encounter_start: dummy_time, encounter_end: dummy_time, encounter_duration : 0, player : String::from(player_display.clone()) });
         ui_update("", &player_display, &ui_data, &encounters);
         let mut update_ui = true;
         'ui: loop
@@ -353,7 +355,7 @@ fn main()
                         },
                         10 => // enter
                         {
-                            if !ui_data.filter_lock
+                            if !ui_data.filter_lock && !encounters.is_empty()
                             {
                                 if ui_data.pointer.2 && ui_data.pointer.1 == 1
                                 {
@@ -363,7 +365,7 @@ fn main()
                                 ui_data.pointer.2=true;
                                 update_ui = true;
                             }
-                            else
+                            else if !encounters.is_empty()
                             {
                                 ui_data.filter_lock = false;
                                 update_ui = true;
@@ -407,7 +409,7 @@ fn main()
                     },
                 Err(e) => {}
             }
-            if update_ui
+            if update_ui && !encounters.is_empty()
             {
                 ui_update(&format!("{:?}", encounters.last().unwrap()), &player_display, &ui_data, &encounters);
                 update_ui = false;
@@ -415,7 +417,6 @@ fn main()
         }
     });
 
-    let mut encounter_counter: u64 = 0;
     let mut encounter: structs::Encounter = structs::Encounter{attackers: Vec::new(), encounter_start: dummy_time, encounter_end: dummy_time, encounter_duration : 0, player : String::from(player.clone()) };
     'parser: loop/*Parse file, send results to main every X secs*/
     {
@@ -474,17 +475,22 @@ fn main()
             if !fightdone && ui_update_timer.elapsed() >= time::Duration::from_millis(1000)
             {
                 ui_update_timer = time::Instant::now();
-                encounter.attackers.sort();
-                parse_tx.send(Box::new((false, encounter.clone())));
+                if encounter.encounter_duration != 0
+                {
+                    encounter.attackers.sort();
+                    parse_tx.send(Box::new((false, encounter.clone())));
+                }
             }
             /*End current encounter if nothing has been parsed in combat within the last 3 secs*/
             if battle_timer.elapsed() >= time::Duration::from_millis(3000)
             {
                 if !fightdone
                 {
-                    encounter.attackers.sort();
-                    parse_tx.send(Box::new((true, encounter.clone())));
-                    encounter_counter += 1;
+                    if encounter.encounter_duration != 0
+                    {
+                        encounter.attackers.sort();
+                        parse_tx.send(Box::new((true, encounter.clone())));
+                    }
                     fightdone = true;
                     break 'encounter_loop;
                 }
