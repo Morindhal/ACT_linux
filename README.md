@@ -21,9 +21,8 @@ Left to do:
 
 *Read triggers from the log and place them into a file. (look into Advanced Combat Trackers xml format to possibly make this program compatible.
 
-*Add the possibility to filter the data displayed when inspecting a encounter.
-
 *Add the possibility to scroll, both in the encounter_win and main_win if the displayed text doesn't fit in that windows height, currently only shows the number of lines that fit.
+
 
 
 This is very much a work in progress.
