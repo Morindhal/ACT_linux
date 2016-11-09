@@ -5,6 +5,16 @@ use std::fmt;
 use std::{thread, time};
 use chrono::*;
 
+
+pub struct ui_data
+{
+    pub pointer: (i32,i32,bool,i32,bool,i32),
+    pub filters: String,
+    pub trigger_pointer: (i32, i32),
+    pub filter_lock: bool
+}
+
+
 #[derive(Eq, Clone)]
 pub struct Attack
 {
@@ -12,7 +22,8 @@ pub struct Attack
     victim: String,
     timestamp: String,
     attack_name: String,
-    crit: String // "" for did not crit?
+    crit: String, // "" for did not crit?
+    damage_type: String
 }
 
 impl Attack
@@ -20,6 +31,18 @@ impl Attack
     pub fn attack(&mut self, attack_data: &regex::Captures)
     {
         
+    }
+    
+    pub fn filter(&self, filters: &str) -> bool
+    {
+        if filters.len() as i32 != 0
+        {
+            for filter in filters.split_whitespace()
+            {
+                if !self.timestamp.contains(filter) && !self.victim.contains(filter) && !self.attack_name.contains(filter) && !self.crit.contains(filter) && !self.damage_type.contains(filter) {return false;}
+            }
+        }
+        true
     }
 }
 
@@ -51,8 +74,8 @@ impl fmt::Display for Attack
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
-        //write!(f, "{}\t\t{}\t{}\t{}", self.victim, self.attack_name, self.crit, self.damage)
-        write!(f, "{}", self.attack_name)
+        write!(f, "{}\t\tVICTIM: {}\tATTACK: {}\tDAMAGE: {}\tCRIT: {}\tTYPE: {}", self.timestamp, self.victim, self.attack_name, self.damage, self.crit, self.damage_type)
+        //write!(f, "{}", self.timestamp, self.victim, self.attack_name)
     }
 }
 
@@ -94,7 +117,7 @@ impl Attacker
 {
     pub fn attack(&mut self, attack_data: &regex::Captures)
     {
-        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), attack_name: String::from(attack_data.name("attack").unwrap()), crit: String::from(attack_data.name("crittype").unwrap())});
+        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), attack_name: String::from(match attack_data.name("attack").unwrap() { "" => "auto attack", val => val } ), crit: String::from(attack_data.name("crittype").unwrap()), damage_type: String::from(attack_data.name("damagetype").unwrap())});
         self.final_damage += attack_data.name("damage").unwrap().parse::<u64>().unwrap();
     }
     
@@ -116,6 +139,19 @@ impl Attacker
         //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
         //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
         format!("{name}: {dps:.3}m ", name=self.name, dps=dps)
+    }
+    
+    pub fn print_attacks(&self, filters: &str) -> String
+    {
+        let mut results: String = String::from("");
+        for attack in &self.attacks
+        {
+            if attack.filter(filters)
+            {
+                results.push_str(&format!("{}\n", attack));
+            }
+        }
+        results
     }
 }
 

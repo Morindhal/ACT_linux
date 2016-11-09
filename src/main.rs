@@ -48,7 +48,7 @@ fn speak(data: &CStr) {
 }
 
 
-fn ui_update( body: &str, highlight: &str, pointer: &(i32,i32,bool,i32,bool,i32), encounters: &Vec<structs::Encounter>, current_encounter: &structs::Encounter)
+fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounters: &Vec<structs::Encounter>)
 {
     let mut max_x = 0;
     let mut max_y = 0;
@@ -65,22 +65,29 @@ fn ui_update( body: &str, highlight: &str, pointer: &(i32,i32,bool,i32,bool,i32)
 
     
     wmove(header_win, 1, 1);
-    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tEnter/Backspace to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\n");
-
-    let mut draw: String;
-    if !encounters.is_empty() && pointer.0 as usize >= 0 && encounters.len() > pointer.0 as usize
+    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tEnter/Backspace to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
+    wprintw(header_win, " Filters: ");
+    wprintw(header_win, &ui_data.filters);
+    /* this is the filter implementation
     {
-        if pointer.1 == 0
+        wprintw(header_win, &format!("{} ", filter));
+    }*/
+
+    let mut draw = String::from("");
+    if !encounters.is_empty() && ui_data.pointer.0 as usize >= 0 && encounters.len() > ui_data.pointer.0 as usize
+    {
+        if ui_data.pointer.1 == 0
         {
-            draw = format!(" {:?}\n", encounters[pointer.0 as usize]);
+            //draw = format!("{}.", body);
+            draw = format!(" {:?}\n", encounters[ui_data.pointer.0 as usize]);
         }
-        else if pointer.1 == 1 && pointer.4
+        else if ui_data.pointer.1 == 1 && ui_data.pointer.4
         {
-            draw = format!(" {} attacks:\n {}\n", encounters[pointer.0 as usize].attackers[pointer.3 as usize].name, encounters[pointer.0 as usize].attackers[pointer.3 as usize]);
+            draw = format!(" {} attacks:\n {}\n", encounters[ui_data.pointer.0 as usize].attackers[ui_data.pointer.3 as usize].name, encounters[ui_data.pointer.0 as usize].attackers[ui_data.pointer.3 as usize].print_attacks(&ui_data.filters));
         }
-        else if pointer.1 == 1 && !pointer.4
+        else if ui_data.pointer.1 == 1 && !ui_data.pointer.4
         {
-            draw = format!(" {:?}\n", encounters[pointer.0 as usize]);
+            draw = format!(" {:?}\n", encounters[ui_data.pointer.0 as usize]);
         }
         else
         {
@@ -89,7 +96,7 @@ fn ui_update( body: &str, highlight: &str, pointer: &(i32,i32,bool,i32,bool,i32)
     }
     else
     {
-        draw = String::from(body);
+        draw = format!("{}.", body);
     }
     wmove(main_win, 1, 1);
     wattron(main_win, A_BOLD());
@@ -100,21 +107,21 @@ fn ui_update( body: &str, highlight: &str, pointer: &(i32,i32,bool,i32,bool,i32)
         if line.contains(highlight)
         {
             wattron(main_win, COLOR_PAIR(1));
-            wprintw(main_win, &if pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
+            wprintw(main_win, &if ui_data.pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
             wattroff(main_win, COLOR_PAIR(1));
         }
         else
         {
-            wprintw(main_win, &if pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
+            wprintw(main_win, &if ui_data.pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
         }
     }
     
-    for i in 0..encounters.len()
+    for i in 0..(encounters.len()-1)
     {
         mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
     }
     wattron(encounter_win, COLOR_PAIR(1));
-    mvwprintw(encounter_win, encounters.len() as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", current_encounter.encounter_duration/60, current_encounter.encounter_duration % 60 ));
+    mvwprintw(encounter_win, encounters.len() as i32, 1, &format!("[ ]Duration: {}:{}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
     wattroff(encounter_win, COLOR_PAIR(1));
 
     wborder(main_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
@@ -126,23 +133,29 @@ fn ui_update( body: &str, highlight: &str, pointer: &(i32,i32,bool,i32,bool,i32)
     wrefresh(encounter_win);
 
 
-    wmove(encounter_win, 1+pointer.0, 2);
-    if pointer.2
+    wmove(encounter_win, 1+ui_data.pointer.0, 2);
+    if ui_data.pointer.2
     {
         waddch(encounter_win, 'X' as chtype);
-        wmove(encounter_win, 1+pointer.0, 2);
+        wmove(encounter_win, 1+ui_data.pointer.0, 2);
     }
     wrefresh(encounter_win);
-    if pointer.1 == 1
+    if ui_data.pointer.1 == 1
     {
         //inspect encounter, mark individual attackers
-        wmove(main_win, 4+pointer.3, 2);
-        if pointer.4
+        wmove(main_win, 4+ui_data.pointer.3, 2);
+        if ui_data.pointer.4
         {
             waddch(main_win, 'X' as chtype);
-            wmove(main_win, 4+pointer.5, 2);
+            wmove(main_win, 4+ui_data.pointer.5, 2);
         }
         wrefresh(main_win);
+    }
+    
+    if ui_data.filter_lock
+    {
+        wmove(header_win, 10, 10+ui_data.filters.len() as i32);
+        wrefresh(header_win);
     }
 
     delwin(main_win);
@@ -171,7 +184,7 @@ fn main()
     let player_display = String::from(player);
     let f = File::open(from_file).unwrap();
     
-    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU | )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) (?P<crittype>\D+) (?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
+    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU | )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) for(?P<crittype>\D*)( of | )(?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
     let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)  (?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
     let mut file = BufReader::new(&f);
     /*jump to the end of the file, negative value here will go to the nth character before the end of file.. Positive values are not encouraged.*/
@@ -210,10 +223,11 @@ fn main()
     {
         let mut ctx = ClipboardContext::new().unwrap();
         let timeout = time::Duration::from_millis(10);
-        let mut pointer: (i32, i32, bool, i32, bool, i32) = (0, 0, false, 0, false, 0);
+        let mut ui_data = structs::ui_data{pointer: (0, 0, false, 0, false, 0), filters: String::from(""), trigger_pointer: (0, 0), filter_lock: false};
         let mut encounters: Vec<structs::Encounter> = Vec::new();
-        let mut current_encounter: structs::Encounter = structs::Encounter{attackers: Vec::new(), encounter_start: dummy_time, encounter_end: dummy_time, encounter_duration : 0, player : String::from(player_display.clone()) };
-        ui_update("", &player_display, &pointer, &encounters, &current_encounter);
+        encounters.push(structs::Encounter{attackers: Vec::new(), encounter_start: dummy_time, encounter_end: dummy_time, encounter_duration : 0, player : String::from(player_display.clone()) });
+        ui_update("", &player_display, &ui_data, &encounters);
+        let mut update_ui = true;
         'ui: loop
         {
             match main_rx.recv_timeout(timeout)
@@ -221,19 +235,20 @@ fn main()
                 Ok(val) => 
                 {
                     
-                    if val.0
+                    if !val.0
                     {
-                        encounters.push(current_encounter.clone());
+                        encounters.pop();
                     }
-                    if !pointer.2
+                    if !ui_data.pointer.2
                     {
-                        pointer.0 = encounters.len() as i32;
+                        ui_data.pointer.0 = encounters.len() as i32;
                     }
-                    current_encounter = val.1;
-                    ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
+                    encounters.push( val.1 );
+                    update_ui = true;
                 },
                 Err(e) => {}
             }
+
             match mainss_rx.recv_timeout(timeout)
             {
                 Ok(val) => match val
@@ -243,19 +258,9 @@ fn main()
                             endwin();
                             std::process::exit(1);
                         },
-                        99 =>  // C
-                            match ctx.set_contents(format!("{}", current_encounter))
-                            {
-                                Ok(_)=>
-                                {
-                                    /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
-                                    speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                                },
-                                Err(e)=>{println!("Clipboard error: {}", e);}
-                            },
-                        67 => // c
+                        99 | 67 =>  // C | c
                         {
-                            if !encounters.is_empty()
+                            if !ui_data.filter_lock
                             {
                                 match ctx.set_contents(format!("{}", encounters.last().unwrap()))
                                 {
@@ -265,96 +270,147 @@ fn main()
                                         speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
                                     },
                                     Err(e)=>{println!("Clipboard error: {}", e);}
-                                }
+                                };
+                            }
+                            else
+                            {
+                                ui_data.filters.push( val as u8 as char );
+                                update_ui = true;
                             }
                         },
                         KEY_UP => 
                         {
-                            if pointer.1 == 0 && !pointer.4
+                            if !ui_data.filter_lock
                             {
-                                if pointer.0>0
+                                if ui_data.pointer.1 == 0 && !ui_data.pointer.4
                                 {
-                                    pointer.0-=1;
+                                    if ui_data.pointer.0>0
+                                    {
+                                        ui_data.pointer.0-=1;
+                                    }
                                 }
-                            }
-                            else if pointer.1 == 1 && !pointer.4
-                            {
-                                if pointer.3>0
+                                else if ui_data.pointer.1 == 1 && !ui_data.pointer.4
                                 {
-                                    pointer.3-=1;
+                                    if ui_data.pointer.3>0
+                                    {
+                                        ui_data.pointer.3-=1;
+                                    }
                                 }
-                            }
-                            else if pointer.4
-                            {
-                                if pointer.5>0
+                                else if ui_data.pointer.4
                                 {
-                                    pointer.5-=1;
+                                    if ui_data.pointer.5>0
+                                    {
+                                        ui_data.pointer.5-=1;
+                                    }
                                 }
+                                update_ui = true;
                             }
-                            ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                         },
                         KEY_DOWN => 
                         {
-                            if pointer.1 == 0
+                            if !ui_data.filter_lock
                             {
-                                if pointer.0 < encounters.len() as i32
+                                if ui_data.pointer.1 == 0
                                 {
-                                    pointer.0+=1;
+                                    if ui_data.pointer.0 < encounters.len() as i32 - 1
+                                    {
+                                        ui_data.pointer.0+=1;
+                                    }
                                 }
+                                else if ui_data.pointer.1 == 1 && !encounters.is_empty() && ui_data.pointer.3 < encounters[ui_data.pointer.0 as usize].attackers.len() as i32 - 1 && !ui_data.pointer.4
+                                {
+                                    ui_data.pointer.3+=1
+                                }
+                                else if ui_data.pointer.4
+                                {
+                                    ui_data.pointer.5+=1;
+                                }
+                                update_ui = true;
                             }
-                            else if pointer.1 == 1 && !encounters.is_empty() && pointer.3 < encounters[pointer.0 as usize].attackers.len() as i32 - 1 && !pointer.4
-                            {
-                                pointer.3+=1
-                            }
-                            else if pointer.4
-                            {
-                                pointer.5+=1;
-                            }
-                                ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                         },
                         KEY_LEFT => 
                         {
-                            if pointer.1 == 1 && pointer.2 && !pointer.4
+                            if !ui_data.filter_lock
                             {
-                                pointer.1 = 0;
-                                ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
+                                if ui_data.pointer.1 == 1 && ui_data.pointer.2 && !ui_data.pointer.4
+                                {
+                                    ui_data.pointer.1 = 0;
+                                    update_ui = true;
+                                }
                             }
                         },
                         KEY_RIGHT => 
                         {
-                            if pointer.1 == 0 && pointer.2 && pointer.0 < encounters.len() as i32
+                            if !ui_data.filter_lock
                             {
-                                pointer.1 = 1;
-                                pointer.3 = 0;
-                                ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
+                                if ui_data.pointer.1 == 0 && ui_data.pointer.2 && ui_data.pointer.0 < encounters.len() as i32
+                                {
+                                    ui_data.pointer.1 = 1;
+                                    ui_data.pointer.3 = 0;
+                                    update_ui = true;
+                                }
                             }
                         },
                         10 => // enter
                         {
-                            if pointer.2 && pointer.1 == 1
+                            if !ui_data.filter_lock
                             {
-                                pointer.4 = true;
-                                pointer.5 = 0;
-                            }
-                            pointer.2=true;
-                            ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
-                        },
-                        KEY_BACKSPACE =>
-                        {
-                            if pointer.4
-                            {
-                                pointer.4 = false;
+                                if ui_data.pointer.2 && ui_data.pointer.1 == 1
+                                {
+                                    ui_data.pointer.4 = true;
+                                    ui_data.pointer.5 = 0;
+                                }
+                                ui_data.pointer.2=true;
+                                update_ui = true;
                             }
                             else
                             {
-                                pointer.2 = false;
-                                pointer.1 = 0;
+                                ui_data.filter_lock = false;
+                                update_ui = true;
                             }
-                            ui_update(&format!("{:?}", current_encounter), &player_display, &pointer, &encounters, &current_encounter);
                         },
-                        _ => {}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//ui_update(&format!("{}", val), &player_display, &pointer, &encounters, &current_encounter);}
+                        KEY_BACKSPACE =>
+                        {
+                            if !ui_data.filter_lock
+                            {
+                                if ui_data.pointer.4
+                                {
+                                    ui_data.pointer.4 = false;
+                                }
+                                else
+                                {
+                                    ui_data.pointer.2 = false;
+                                    ui_data.pointer.1 = 0;
+                                }
+                                update_ui = true;
+                            }
+                            else
+                            {
+                                ui_data.filters.pop();
+                                update_ui = true;
+                            }
+                        },
+                        43 => // + key
+                        {
+                            ui_data.filter_lock = true;
+                            update_ui = true;
+                        },
+                        _ => 
+                        {
+                            if ui_data.filter_lock
+                            {
+                                ui_data.filters.push( val as u8 as char );
+                                update_ui = true;
+                            }
+                        }
+                        //ui_update(&format!("{}", val), &player_display, &ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
                     },
                 Err(e) => {}
+            }
+            if update_ui
+            {
+                ui_update(&format!("{:?}", encounters.last().unwrap()), &player_display, &ui_data, &encounters);
+                update_ui = false;
             }
         }
     });
@@ -442,8 +498,17 @@ fn main()
 (1477272172)[Mon Oct 24 03:22:52 2016] Kabernet\'s Asylum multi attacks Bonesnapper for a critical of 36622 mental damage.\r\n
 (1478123041)[Wed Nov  2 22:44:01 2016] YOU hit training dummy for a critical of 377262 heat damage.
 (1478123041)[Wed Nov  2 22:44:01 2016] YOU multi attack training dummy for a critical of 148320 heat damage.
+(1478706458)[Wed Nov  9 16:47:38 2016] YOUR Noxious Rending IV hits training dummy for 875382 disease damage.
 (1478132824)[Thu Nov  3 01:27:04 2016] Devorstator's Impatience heals Devorstator for 43947 hit points.
 YOU aoe attack training dummy for a critical of 204585 heat damage.
+
+Enemy attacks are mis-parsed when they have a space in their name:
+a deadwood harbinger gets parsed as name: "a" and attack_name: "deadwood harbinger"
+this needs to be fixed in the regex when time allows, not that important at the moment though.
+
+Attacks does not currently catch the "status", meaning if they double attack, flurry or AOE attack. This needs to be added.
+
+attackers.print_attacks(filters: String) currently returns a printable string, this may need to change to a string vector to enable scrolling in the window and listing the line numbers.
 
 println!("{}",buffer) <-- add this to the match X.captures() statement in the None body. Also needs to disable the code in the ui_update function.
 
