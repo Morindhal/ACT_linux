@@ -297,7 +297,7 @@ fn main()
                                     pointer.0+=1;
                                 }
                             }
-                            else if pointer.1 == 1 && pointer.3 < encounters[pointer.0 as usize].attackers.len() as i32 -1  && !pointer.4
+                            else if pointer.1 == 1 && !encounters.is_empty() && pointer.3 < encounters[pointer.0 as usize].attackers.len() as i32 - 1 && !pointer.4
                             {
                                 pointer.3+=1
                             }
@@ -317,7 +317,7 @@ fn main()
                         },
                         KEY_RIGHT => 
                         {
-                            if pointer.1 == 0 && pointer.2
+                            if pointer.1 == 0 && pointer.2 && pointer.0 < encounters.len() as i32
                             {
                                 pointer.1 = 1;
                                 pointer.3 = 0;
