@@ -65,29 +65,26 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
 
     
     wmove(header_win, 1, 1);
-    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tEnter/Backspace to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
+    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tTAB to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
     wprintw(header_win, " Filters: ");
     wprintw(header_win, &ui_data.filters);
-    /* this is the filter implementation
-    {
-        wprintw(header_win, &format!("{} ", filter));
-    }*/
 
     let mut draw = String::from("");
-    if !encounters.is_empty() && ui_data.pointer.0 as usize >= 0 && encounters.len() > ui_data.pointer.0 as usize
+    if !ui_data.debug
     {
-        if ui_data.pointer.1 == 0
+        if !ui_data.is_locked() //render normally, navigating left side
         {
-            //draw = format!("{}.", body);
-            draw = format!(" {:?}\n", encounters[ui_data.pointer.0 as usize]);
+            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize]);
         }
-        else if ui_data.pointer.1 == 1 && ui_data.pointer.4
+        else if ui_data.nav_lock_encounter //render normally, navigation right side
         {
-            draw = format!(" {} attacks:\n {}\n", encounters[ui_data.pointer.0 as usize].attackers[ui_data.pointer.3 as usize].name, encounters[ui_data.pointer.0 as usize].attackers[ui_data.pointer.3 as usize].print_attacks(&ui_data.filters));
+            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize]);
         }
-        else if ui_data.pointer.1 == 1 && !ui_data.pointer.4
+        else if ui_data.nav_lock_combatant //replace right side with the combatants attacks
         {
-            draw = format!(" {:?}\n", encounters[ui_data.pointer.0 as usize]);
+            draw = format!("{} attacks:\n{}\n", 
+                encounters[ui_data.nav_xy[0].0 as usize].attackers[ui_data.nav_xy[1].0 as usize].name,
+                encounters[ui_data.nav_xy[0].0 as usize].attackers[ui_data.nav_xy[1].0 as usize].print_attacks(&ui_data.filters));
         }
         else
         {
@@ -98,6 +95,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     {
         draw = format!("{}.", body);
     }
+
     wmove(main_win, 1, 1);
     wattron(main_win, A_BOLD());
     wprintw(main_win, "\tEncounters:\n\n");
@@ -107,12 +105,12 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
         if line.contains(highlight)
         {
             wattron(main_win, COLOR_PAIR(1));
-            wprintw(main_win, &if ui_data.pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
+            wprintw(main_win, &if ui_data.nav_lock_encounter {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
             wattroff(main_win, COLOR_PAIR(1));
         }
         else
         {
-            wprintw(main_win, &if ui_data.pointer.2 {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
+            wprintw(main_win, &if ui_data.nav_lock_encounter {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
         }
     }
     
@@ -136,26 +134,35 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     wrefresh(encounter_win);
 
 
-    wmove(encounter_win, 1+ui_data.pointer.0, 2);
-    if ui_data.pointer.2
+    wmove(encounter_win, 1+ui_data.nav_xy[0].0, 2);
+    if ui_data.nav_lock_refresh
+    {
+        waddch(encounter_win, 'O' as chtype);
+    }
+    else
     {
         waddch(encounter_win, 'X' as chtype);
-        wmove(encounter_win, 1+ui_data.pointer.0, 2);
     }
+    wmove(encounter_win, 1+ui_data.nav_xy[0].0, 2);
     wrefresh(encounter_win);
-    if ui_data.pointer.1 == 1
+
+    if ui_data.nav_lock_encounter
     {
         //inspect encounter, mark individual attackers
-        wmove(main_win, 4+ui_data.pointer.3, 2);
-        if ui_data.pointer.4
-        {
-            waddch(main_win, 'X' as chtype);
-            wmove(main_win, 4+ui_data.pointer.5, 2);
-        }
+        wmove(main_win, 4+ui_data.nav_xy.last().unwrap().1, 2);
+        waddch(main_win, 'X' as chtype);
+        wmove(main_win, 4+ui_data.nav_xy.last().unwrap().1, 2);
+        wrefresh(main_win);
+    }
+    else if ui_data.nav_lock_combatant
+    {
+        wmove(main_win, 1+ui_data.nav_xy[2].0, 2);
+        waddch(main_win, 'X' as chtype);
+        wmove(main_win, 1+ui_data.nav_xy[2].0, 2);
         wrefresh(main_win);
     }
     
-    if ui_data.filter_lock
+    if ui_data.nav_lock_filter
     {
         wmove(header_win, 10, 10+ui_data.filters.len() as i32);
         wrefresh(header_win);
@@ -188,7 +195,7 @@ fn main()
     let f = File::open(from_file).unwrap();
     
     let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU | )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) for(?P<crittype>\D*)( of | )(?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
-    let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)  (?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
+    let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)(  | )(?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
     let mut file = BufReader::new(&f);
     /*jump to the end of the file, negative value here will go to the nth character before the end of file.. Positive values are not encouraged.*/
     file.seek(SeekFrom::End(0));
@@ -226,9 +233,8 @@ fn main()
     {
         let mut ctx = ClipboardContext::new().unwrap();
         let timeout = time::Duration::from_millis(10);
-        let mut ui_data = structs::ui_data{pointer: (0, 0, false, 0, false, 0), filters: String::from(""), trigger_pointer: (0, 0), filter_lock: false};
+        let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, filters: String::from(""), debug: false};
         let mut encounters: Vec<structs::Encounter> = Vec::new();
-        ui_update("", &player_display, &ui_data, &encounters);
         let mut update_ui = true;
         'ui: loop
         {
@@ -236,14 +242,13 @@ fn main()
             {
                 Ok(val) => 
                 {
-                    
                     if !val.0
                     {
                         encounters.pop();
                     }
-                    if !ui_data.pointer.2
+                    if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
                     {
-                        ui_data.pointer.0 = encounters.len() as i32;
+                        ui_data.nav_xy.last_mut().unwrap().0 = encounters.len() as i32;
                     }
                     encounters.push( val.1 );
                     update_ui = true;
@@ -262,9 +267,9 @@ fn main()
                         },
                         99 | 67 =>  // C | c
                         {
-                            if !ui_data.filter_lock
+                            if !ui_data.is_locked()
                             {
-                                match ctx.set_contents(format!("{}", encounters.last().unwrap()))
+                                match ctx.set_contents(format!("{}", if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
                                 {
                                     Ok(_)=>
                                     {
@@ -282,124 +287,131 @@ fn main()
                         },
                         KEY_UP => 
                         {
-                            if !ui_data.filter_lock
+                            if ui_data.nav_xy.last().unwrap().0 > 0
                             {
-                                if ui_data.pointer.1 == 0 && !ui_data.pointer.4
-                                {
-                                    if ui_data.pointer.0>0
-                                    {
-                                        ui_data.pointer.0-=1;
-                                    }
-                                }
-                                else if ui_data.pointer.1 == 1 && !ui_data.pointer.4
-                                {
-                                    if ui_data.pointer.3>0
-                                    {
-                                        ui_data.pointer.3-=1;
-                                    }
-                                }
-                                else if ui_data.pointer.4
-                                {
-                                    if ui_data.pointer.5>0
-                                    {
-                                        ui_data.pointer.5-=1;
-                                    }
-                                }
-                                update_ui = true;
+                                ui_data.nav_xy.last_mut().unwrap().0 -= 1;
                             }
+                            update_ui = true;
                         },
                         KEY_DOWN => 
                         {
-                            if !ui_data.filter_lock
+                            if ui_data.nav_lock_encounter && ui_data.nav_xy.last().unwrap().0 < encounters[ui_data.nav_xy[ui_data.nav_xy.len() - 2 as usize].0 as usize].attackers.len() as i32
                             {
-                                if ui_data.pointer.1 == 0
-                                {
-                                    if ui_data.pointer.0 < encounters.len() as i32 - 1
-                                    {
-                                        ui_data.pointer.0+=1;
-                                    }
-                                }
-                                else if ui_data.pointer.1 == 1 && !encounters.is_empty() && ui_data.pointer.3 < encounters[ui_data.pointer.0 as usize].attackers.len() as i32 - 1 && !ui_data.pointer.4
-                                {
-                                    ui_data.pointer.3+=1
-                                }
-                                else if ui_data.pointer.4
-                                {
-                                    ui_data.pointer.5+=1;
-                                }
-                                update_ui = true;
+                                ui_data.nav_xy.last_mut().unwrap().0 += 1;
                             }
-                        },
+                            else if ui_data.nav_lock_combatant
+                            {
+                                ui_data.nav_xy.last_mut().unwrap().0 += 1;
+                            }
+                            else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < encounters.len() as i32 - 1
+                            {
+                                ui_data.nav_xy.last_mut().unwrap().0 += 1;
+                            }
+                            update_ui = true;
+                        },/*
                         KEY_LEFT => 
                         {
-                            if !ui_data.filter_lock
+                            if !ui_data.nav_lock_filter
                             {
-                                if ui_data.pointer.1 == 1 && ui_data.pointer.2 && !ui_data.pointer.4
+                                if ui_data.nav_xy.last().unwrap().1 == 1 && ui_data.nav_lock_encounter && !ui_data.nav_lock_combatant
                                 {
-                                    ui_data.pointer.1 = 0;
+                                    ui_data.nav_xy.last().unwrap().1 = 0;
                                     update_ui = true;
                                 }
                             }
                         },
                         KEY_RIGHT => 
                         {
-                            if !ui_data.filter_lock
+                            if !ui_data.nav_lock_filter
                             {
-                                if ui_data.pointer.1 == 0 && ui_data.pointer.2 && ui_data.pointer.0 < encounters.len() as i32
+                                if ui_data.nav_lock_encounter && ui_data.nav_xy.last().unwrap().0 < encounters.len() as i32
                                 {
-                                    ui_data.pointer.1 = 1;
-                                    ui_data.pointer.3 = 0;
+                                    ui_data.deeper();
+                                    ui_data.unlock();
+                                    ui_data.nav_lock_combatant = true;
                                     update_ui = true;
                                 }
                             }
-                        },
+                        },*/
                         10 => // enter
                         {
-                            if !ui_data.filter_lock && !encounters.is_empty()
+                            if ui_data.nav_lock_filter
                             {
-                                if ui_data.pointer.2 && ui_data.pointer.1 == 1
+                                ui_data.surface();
+                                ui_data.nav_lock_filter = false;
+                            }
+                            else if ui_data.nav_lock_encounter
+                            {
+                                ui_data.deeper();
+                                ui_data.nav_lock_encounter = false;
+                                ui_data.nav_lock_combatant = true;
+                            }
+                            else if !ui_data.is_locked()
+                            {
+                                if ui_data.nav_xy.last().unwrap().0 == encounters.len() as i32
                                 {
-                                    ui_data.pointer.4 = true;
-                                    ui_data.pointer.5 = 0;
+                                    ui_data.nav_xy.last_mut().unwrap().0 -= 1; // ugly code, will bug around --- needs fix
                                 }
-                                ui_data.pointer.2=true;
-                                update_ui = true;
+                                ui_data.deeper();
+                                ui_data.nav_lock_encounter = true;
                             }
-                            else if !encounters.is_empty()
-                            {
-                                ui_data.filter_lock = false;
-                                update_ui = true;
-                            }
+                            update_ui = true;
                         },
                         KEY_BACKSPACE =>
                         {
-                            if !ui_data.filter_lock
+                            if !ui_data.nav_lock_filter
                             {
-                                if ui_data.pointer.4
+                                if ui_data.nav_lock_encounter
                                 {
-                                    ui_data.pointer.4 = false;
+                                    ui_data.surface();
+                                    ui_data.nav_lock_encounter = false;
                                 }
-                                else
+                                else if ui_data.nav_lock_combatant
                                 {
-                                    ui_data.pointer.2 = false;
-                                    ui_data.pointer.1 = 0;
+                                    ui_data.surface();
+                                    ui_data.nav_lock_encounter = true;
+                                    ui_data.nav_lock_combatant = false;
                                 }
-                                update_ui = true;
+                                else  //backspace with ui_data.nav_xy having a len() of 1
+                                {
+                                }
                             }
                             else
                             {
                                 ui_data.filters.pop();
-                                update_ui = true;
                             }
+                            update_ui = true;
                         },
                         43 => // + key
                         {
-                            ui_data.filter_lock = true;
+                            if !ui_data.nav_lock_filter
+                            {
+                                ui_data.deeper();
+                                ui_data.nav_lock_filter = true;
+                                update_ui = true;
+                            }
+                            else
+                            {
+                                ui_data.filters.push( val as u8 as char );
+                                update_ui = true;
+                            }
+                        },
+                        9 => // TAB key
+                        {
+                            if ui_data.nav_lock_refresh
+                            {
+                                ui_data.nav_lock_refresh = false;
+                            }
+                            else
+                            {
+                                ui_data.nav_lock_refresh = true;
+                            }
                             update_ui = true;
                         },
                         _ => 
                         {
-                            if ui_data.filter_lock
+                            ui_update(&format!("{}", val), &player_display, &ui_data, &encounters);
+                            if ui_data.nav_lock_filter
                             {
                                 ui_data.filters.push( val as u8 as char );
                                 update_ui = true;
@@ -441,7 +453,7 @@ fn main()
                         }};
                     }
                 });
-                match re.captures(buffer.as_str()) {None => {/*println!("{}",buffer)*/}, Some(cap) =>
+                match re.captures(buffer.as_str()) {None => {/*println!("{}",buffer);*/}, Some(cap) =>
                 {
                     match timeparser.captures(cap.name("datetime").unwrap()) {None => {}, Some(time_cap) =>
                     {

@@ -8,12 +8,40 @@ use chrono::*;
 
 pub struct ui_data
 {
-    pub pointer: (i32,i32,bool,i32,bool,i32),
+    pub nav_xy: Vec<(i32, i32)>,
+    pub nav_lock_encounter: bool,
+    pub nav_lock_combatant: bool,
+    pub nav_lock_filter: bool,
+    pub nav_lock_refresh: bool,
     pub filters: String,
-    pub trigger_pointer: (i32, i32),
-    pub filter_lock: bool
+    pub debug: bool
 }
 
+impl ui_data
+{
+    pub fn is_locked(&self) -> bool
+    {
+        if self.nav_lock_combatant || self.nav_lock_encounter || self.nav_lock_filter {true}
+        else {false}
+    }
+
+    pub fn unlock(&mut self)
+    {
+        self.nav_lock_combatant = false;
+        self.nav_lock_encounter = false;
+        self.nav_lock_filter = false;
+    }
+    
+    pub fn deeper(&mut self)
+    {
+        self.nav_xy.push((0,0));
+    }
+    
+    pub fn surface(&mut self)
+    {
+        self.nav_xy.pop();
+    }
+}
 
 #[derive(Eq, Clone)]
 pub struct Attack
