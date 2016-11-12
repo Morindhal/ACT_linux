@@ -149,9 +149,9 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     if ui_data.nav_lock_encounter
     {
         //inspect encounter, mark individual attackers
-        wmove(main_win, 4+ui_data.nav_xy.last().unwrap().1, 2);
+        wmove(main_win, 4+ui_data.nav_xy[1].0, 2);
         waddch(main_win, 'X' as chtype);
-        wmove(main_win, 4+ui_data.nav_xy.last().unwrap().1, 2);
+        wmove(main_win, 4+ui_data.nav_xy[1].0, 2);
         wrefresh(main_win);
     }
     else if ui_data.nav_lock_combatant
@@ -295,7 +295,7 @@ fn main()
                         },
                         KEY_DOWN => 
                         {
-                            if ui_data.nav_lock_encounter && ui_data.nav_xy.last().unwrap().0 < encounters[ui_data.nav_xy[ui_data.nav_xy.len() - 2 as usize].0 as usize].attackers.len() as i32
+                            if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < encounters[ui_data.nav_xy[0].0 as usize].attackers.len() as i32 - 1
                             {
                                 ui_data.nav_xy.last_mut().unwrap().0 += 1;
                             }

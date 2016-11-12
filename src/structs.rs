@@ -102,7 +102,7 @@ impl fmt::Display for Attack
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
-        write!(f, "{}\t\tVICTIM: {}\tATTACK: {}\tDAMAGE: {}\tCRIT: {}\tTYPE: {}", self.timestamp, self.victim, self.attack_name, self.damage, self.crit, self.damage_type)
+        write!(f, "{:8}   VICTIM: {:10}   ATTACK: {:10}   DAMAGE: {}   CRIT: {:10}   TYPE: {:10}", self.timestamp, self.victim, self.attack_name, self.damage, self.crit, self.damage_type)
         //write!(f, "{}", self.timestamp, self.victim, self.attack_name)
     }
 }
