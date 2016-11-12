@@ -118,10 +118,10 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     {
         for i in 0..(encounters.len()-1)
         {
-            mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
+            mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
         }
         wattron(encounter_win, COLOR_PAIR(1));
-        mvwprintw(encounter_win, encounters.len() as i32, 1, &format!("[ ]Duration: {}:{}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
+        mvwprintw(encounter_win, encounters.len() as i32, 1, &format!("[ ]Duration: {}:{:02}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
         wattroff(encounter_win, COLOR_PAIR(1));
     }
 

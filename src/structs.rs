@@ -248,7 +248,7 @@ impl fmt::Debug for Encounter
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
         let duration = (self.encounter_end-self.encounter_start);
-        write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
+        write!(f, "Encounter duration: {}:{:02}\n", duration.num_minutes(), duration.num_seconds() % 60 );
         for i in 0..((self.attackers).len())
         {
             write!(f, "{}\n", ((self.attackers))[i].print_full( duration.num_seconds() as u64 ));
@@ -262,7 +262,7 @@ impl fmt::Display for Encounter
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
         let duration = (self.encounter_end-self.encounter_start);
-        write!(f, "Encounter duration: {}:{}\n", duration.num_minutes(), duration.num_seconds() % 60 );
+        write!(f, "Encounter duration: {}:{:02}\n", duration.num_minutes(), duration.num_seconds() % 60 );
         for i in 0..((self.attackers).len())
         {
             write!(f, "{}\n", ((self.attackers))[i].print( duration.num_seconds() as u64 ));
