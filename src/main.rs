@@ -48,16 +48,18 @@ fn speak(data: &CStr) {
 }
 
 
-fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounters: &Vec<structs::Encounter>)
+fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encounters: &Vec<structs::Encounter>)
 {
     let mut max_x = 0;
     let mut max_y = 0;
     getmaxyx(stdscr(), &mut max_y, &mut max_x);
+    ui_data.nav_main_win_scroll.0 = max_y - 22;
+    ui_data.nav_encounter_win_scroll.0 = max_y - 22;
+//-22
 
-
-    let mut main_win = newwin(max_y-22, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
+    let mut main_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
     let mut header_win = newwin(20, max_x, 0, 0);
-    let mut encounter_win = newwin(max_y-22, ENCOUNTER_WINDOW_WIDTH, 20, 0);
+    let mut encounter_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
 
     wclear(main_win);
     wclear(header_win);
@@ -115,13 +117,18 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     }
     
     if !encounters.is_empty()
-    {
-        for i in 0..(encounters.len()-1)
-        {
-            mvwprintw(encounter_win, i as i32 + 1, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i].encounter_duration/60, encounters[i].encounter_duration % 60 ));
+    {let mut bound = encounters.len();
+    if (bound as i32 - (ui_data.nav_encounter_win_scroll.0 - 2)) < 0 {bound = 0;}
+    else { bound = encounters.len() - (ui_data.nav_encounter_win_scroll.0 as usize - 2); }
+    let mut line_print = 0;
+        for i in (bound)..(encounters.len() - 1)
+        {// från X till encounter längd 0-3 1-4 2-5 minus scroll, 0-3 1-4-1=0-3 osv
+            //if encounters.len() <= i - ui_data.nav_encounter_win_scroll.1 as usize || (i as i32 - ui_data.nav_encounter_win_scroll.1 < 0) {break;}
+            mvwprintw(encounter_win, line_print as i32 + 1, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration/60, encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration % 60 ));
+            line_print += 1;
         }
         wattron(encounter_win, COLOR_PAIR(1));
-        mvwprintw(encounter_win, encounters.len() as i32, 1, &format!("[ ]Duration: {}:{:02}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
+        mvwprintw(encounter_win, line_print+1, 1, &format!("[ ]Duration: {}:{:02}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
         wattroff(encounter_win, COLOR_PAIR(1));
     }
 
@@ -134,7 +141,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     wrefresh(encounter_win);
 
 
-    wmove(encounter_win, 1+ui_data.nav_xy[0].0, 2);
+    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 2 } else { ui_data.nav_xy[0].0 } , 2);
     if ui_data.nav_lock_refresh
     {
         waddch(encounter_win, 'O' as chtype);
@@ -143,7 +150,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &structs::ui_data, encounter
     {
         waddch(encounter_win, 'X' as chtype);
     }
-    wmove(encounter_win, 1+ui_data.nav_xy[0].0, 2);
+    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 2 } else { ui_data.nav_xy[0].0 } , 2);
     wrefresh(encounter_win);
 
     if ui_data.nav_lock_encounter
@@ -233,7 +240,7 @@ fn main()
     {
         let mut ctx = ClipboardContext::new().unwrap();
         let timeout = time::Duration::from_millis(10);
-        let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, filters: String::from(""), debug: false};
+        let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (0, 0), filters: String::from(""), debug: false};
         let mut encounters: Vec<structs::Encounter> = Vec::new();
         let mut update_ui = true;
         'ui: loop
@@ -289,7 +296,19 @@ fn main()
                         {
                             if ui_data.nav_xy.last().unwrap().0 > 0
                             {
-                                ui_data.nav_xy.last_mut().unwrap().0 -= 1;
+                                if !ui_data.is_locked() && ui_data.nav_encounter_win_scroll.0 - encounters.len() as i32 + ui_data.nav_encounter_win_scroll.1 - 2< 0
+                                {
+                                    ui_data.nav_encounter_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                }
+                                else if ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].attackers.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
+                                        ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].attackers.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
+                                {
+                                    ui_data.nav_main_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                }
+                                else
+                                {
+                                    ui_data.nav_xy.last_mut().unwrap().0 -= 1;
+                                }
                             }
                             update_ui = true;
                         },
@@ -305,7 +324,14 @@ fn main()
                             }
                             else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < encounters.len() as i32 - 1
                             {
-                                ui_data.nav_xy.last_mut().unwrap().0 += 1;
+                                if ui_data.nav_encounter_win_scroll.1 > 0
+                                {
+                                    ui_data.nav_encounter_win_scroll.1 -= 1;
+                                }
+                                else
+                                {
+                                    ui_data.nav_xy.last_mut().unwrap().0 += 1;
+                                }
                             }
                             update_ui = true;
                         },/*
@@ -410,20 +436,20 @@ fn main()
                         },
                         _ => 
                         {
-                            ui_update(&format!("{}", val), &player_display, &ui_data, &encounters);
+                            ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);
                             if ui_data.nav_lock_filter
                             {
                                 ui_data.filters.push( val as u8 as char );
                                 update_ui = true;
                             }
                         }
-                        //ui_update(&format!("{}", val), &player_display, &ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
+                        //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
                     },
                 Err(e) => {}
             }
             if update_ui && !encounters.is_empty()
             {
-                ui_update(&format!("{:?}", encounters.last().unwrap()), &player_display, &ui_data, &encounters);
+                ui_update(&format!("{:?}", encounters.last().unwrap()), &player_display, &mut ui_data, &encounters);
                 update_ui = false;
             }
         }

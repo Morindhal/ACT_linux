@@ -13,6 +13,8 @@ pub struct ui_data
     pub nav_lock_combatant: bool,
     pub nav_lock_filter: bool,
     pub nav_lock_refresh: bool,
+    pub nav_main_win_scroll: (i32, i32),
+    pub nav_encounter_win_scroll: (i32, i32),
     pub filters: String,
     pub debug: bool
 }
@@ -102,7 +104,7 @@ impl fmt::Display for Attack
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
-        write!(f, "{:8}   VICTIM: {:10}   ATTACK: {:10}   DAMAGE: {}   CRIT: {:10}   TYPE: {:10}", self.timestamp, self.victim, self.attack_name, self.damage, self.crit, self.damage_type)
+        write!(f, "{:25.25}   VICTIM: {:20.20}   ATTACK: {:30.30}   DAMAGE: {:>15.15}   CRIT: {:>20.20}   TYPE: {:>10.10}", self.timestamp, self.victim, self.attack_name, self.damage, self.crit, self.damage_type)
         //write!(f, "{}", self.timestamp, self.victim, self.attack_name)
     }
 }
