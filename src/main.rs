@@ -256,6 +256,7 @@ fn main()
                     if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
                     {
                         ui_data.nav_xy.last_mut().unwrap().0 = encounters.len() as i32;
+                        ui_data.nav_encounter_win_scroll.1 = 0;
                     }
                     encounters.push( val.1 );
                     update_ui = true;
