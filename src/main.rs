@@ -53,6 +53,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
     let mut max_x = 0;
     let mut max_y = 0;
     getmaxyx(stdscr(), &mut max_y, &mut max_x);
+//    max_y = 5;
     ui_data.nav_main_win_scroll.0 = max_y - 22;
     ui_data.nav_encounter_win_scroll.0 = max_y - 22;
 //-22
@@ -80,7 +81,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
         }
         else if ui_data.nav_lock_encounter //render normally, navigation right side
         {
-            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize]);
+            draw = format!("{:?}\n", encounters[(ui_data.nav_xy[0].0 )as usize]);
         }
         else if ui_data.nav_lock_combatant //replace right side with the combatants attacks
         {
@@ -141,7 +142,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
     wrefresh(encounter_win);
 
 
-    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 2 } else { ui_data.nav_xy[0].0 } , 2);
+    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 3 } else { ui_data.nav_xy[0].0 } , 2);
     if ui_data.nav_lock_refresh
     {
         waddch(encounter_win, 'O' as chtype);
@@ -150,7 +151,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
     {
         waddch(encounter_win, 'X' as chtype);
     }
-    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 2 } else { ui_data.nav_xy[0].0 } , 2);
+    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 3 } else { ui_data.nav_xy[0].0 } , 2);
     wrefresh(encounter_win);
 
     if ui_data.nav_lock_encounter
@@ -240,7 +241,7 @@ fn main()
     {
         let mut ctx = ClipboardContext::new().unwrap();
         let timeout = time::Duration::from_millis(10);
-        let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (0, 0), filters: String::from(""), debug: false};
+        let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
         let mut encounters: Vec<structs::Encounter> = Vec::new();
         let mut update_ui = true;
         'ui: loop
@@ -255,7 +256,7 @@ fn main()
                     }
                     if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
                     {
-                        ui_data.nav_xy.last_mut().unwrap().0 = encounters.len() as i32;
+                        ui_data.nav_xy[0].0 = encounters.len() as i32;
                         ui_data.nav_encounter_win_scroll.1 = 0;
                     }
                     encounters.push( val.1 );
@@ -297,9 +298,9 @@ fn main()
                         {
                             if ui_data.nav_xy.last().unwrap().0 > 0
                             {
-                                if !ui_data.is_locked() && ui_data.nav_encounter_win_scroll.0 - encounters.len() as i32 + ui_data.nav_encounter_win_scroll.1 - 2< 0
+                                if !ui_data.is_locked() && ui_data.nav_encounter_win_scroll.0 - encounters.len() as i32 + ui_data.nav_encounter_win_scroll.1 - 2 < 0
                                 {
-                                    ui_data.nav_encounter_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                    ui_data.nav_encounter_win_scroll.1 += 1;
                                 }
                                 else if ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].attackers.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
                                         ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].attackers.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
@@ -327,7 +328,7 @@ fn main()
                             {
                                 if ui_data.nav_encounter_win_scroll.1 > 0
                                 {
-                                    ui_data.nav_encounter_win_scroll.1 -= 1;
+                                    ui_data.nav_encounter_win_scroll.1 -= 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
                                 }
                                 else
                                 {
