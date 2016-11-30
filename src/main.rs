@@ -226,7 +226,7 @@ fn main()
     let mut buffer = String::new();
     let mut battle_timer = time::Instant::now();
     let mut ui_update_timer = time::Instant::now();
-    let mut fightdone = false;
+    let mut fightdone = true;
     
     
     let buttonlistener = thread::spawn(move || 
@@ -244,6 +244,7 @@ fn main()
         let timeout = time::Duration::from_millis(10);
         let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
         let mut encounters: Vec<structs::CombatantList> = Vec::new();
+        encounters.push(structs::CombatantList::new(structs::getTime("default_time")));
         let mut update_ui = true;
         'ui: loop
         {
@@ -253,17 +254,16 @@ fn main()
                 {
                     if val.0
                     {
-                        if val.1.len()!=0
-                        {encounters.push(structs::CombatantList::new(structs::getTime(val.1[0].timestamp.as_str())));}
-                        else
-                        {encounters.push(structs::CombatantList::new(structs::getTime("default_time")));}
+                        encounters.push(structs::CombatantList::new(structs::getTime("default_time")));
                     }
                     if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
                     {
-                        ui_data.nav_xy[0].0 = encounters.len() as i32 - 1;
-                        ui_data.nav_encounter_win_scroll.1 = 0;
+                        if encounters.last().unwrap().attacks.len() != 0
+                        {
+                            ui_data.nav_xy[0].0 = encounters.len() as i32 - 1;
+                            ui_data.nav_encounter_win_scroll.1 = 0;
+                        }
                     }
-                    //encounters.push( val.1 );     Add code to push attacks into the CombatantList
                     for attack in val.1
                     {
                         encounters.last_mut().unwrap().attack(attack);
