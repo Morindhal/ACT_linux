@@ -48,9 +48,10 @@ impl ui_data
 #[derive(Eq, Clone)]
 pub struct Attack
 {
+    attacker: String,
     damage: u64,
     victim: String,
-    timestamp: String,
+    pub timestamp: String,
     attack_name: String,
     crit: String, // "" for did not crit?
     damage_type: String
@@ -58,9 +59,15 @@ pub struct Attack
 
 impl Attack
 {
-    pub fn attack(&mut self, attack_data: &regex::Captures)
+    pub fn attack(&mut self, attack_data: &regex::Captures, attacker: &str)
     {
-        
+        self.attacker = String::from(attacker);
+        self.damage = attack_data.name("damage").unwrap().parse::<u64>().unwrap();
+        self.victim = String::from(attack_data.name("target").unwrap());
+        self.timestamp = String::from(attack_data.name("datetime").unwrap());
+        self.attack_name = String::from(match attack_data.name("attack").unwrap() { "" => "auto attack", val => val } );
+        self.crit = String::from(attack_data.name("crittype").unwrap());
+        self.damage_type = String::from(attack_data.name("damagetype").unwrap());
     }
     
     pub fn filter(&self, filters: &str) -> bool
@@ -73,6 +80,21 @@ impl Attack
             }
         }
         true
+    }
+    
+    pub fn new()
+        -> Attack
+    {
+        Attack
+        {
+            attacker: String::from("undefined"),
+            damage: 0,
+            victim: String::from("undefined"),
+            timestamp: String::from("undefined"),
+            attack_name: String::from("undefined"),
+            crit: String::from("undefined"),
+            damage_type: String::from("undefined")
+        }
     }
 }
 
@@ -147,7 +169,7 @@ impl Attacker
 {
     pub fn attack(&mut self, attack_data: &regex::Captures)
     {
-        self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), attack_name: String::from(match attack_data.name("attack").unwrap() { "" => "auto attack", val => val } ), crit: String::from(attack_data.name("crittype").unwrap()), damage_type: String::from(attack_data.name("damagetype").unwrap())});
+        //self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), attack_name: String::from(match attack_data.name("attack").unwrap() { "" => "auto attack", val => val } ), crit: String::from(attack_data.name("crittype").unwrap()), damage_type: String::from(attack_data.name("damagetype").unwrap())});
         self.final_damage += attack_data.name("damage").unwrap().parse::<u64>().unwrap();
     }
     
@@ -276,4 +298,157 @@ impl fmt::Display for Encounter
 impl Clone for Encounter
 {
     fn clone(&self) -> Encounter{ Encounter{attackers: self.attackers.clone(), encounter_start: self.encounter_start.clone(), encounter_end: self.encounter_end.clone(), encounter_duration: self.encounter_duration, player: self.player.clone()} }
+}
+
+
+pub struct CombatantList
+{
+    pub combatants: Vec<Combatant>,
+    pub attacks: Vec<Attack>,
+    pub encounter_start: DateTime<UTC>,
+    pub encounter_end: DateTime<UTC>,
+    pub encounter_duration: u64,
+    pub highestHit: Attack,
+    pub highestHeal: Attack
+}
+
+impl CombatantList
+{
+    pub fn attack(&mut self, attack: Attack)
+    {
+        if self.attacks.len() == 0
+        {self.encounter_start = getTime(attack.timestamp.as_str());}
+        self.encounter_end = getTime(attack.timestamp.as_str());
+        //Check if attacker in already in the CombatantList
+            //If not, push a new attacker
+        //encounter_start needed, don't do this here but modify the field directly from main.rs when a new encounter is started
+        //Check if the new Attack is higher than the highestHit, if so replace this Attack with a new Attack
+            //same as above but with heal
+        match self.find_combatant(attack.attacker.as_str())
+        {
+            -1 =>/*New attacker*/
+                {
+                    self.combatants.push(Combatant{name: attack.attacker.clone(), highestHit: Attack::new(), highestHeal: Attack::new(), final_healed: 0, final_damage: 0, combatstart: getTime(attack.timestamp.as_str()), sortByDps: true});
+                    self.attacks.push(attack);
+                    self.combatants.last_mut().unwrap().final_damage += self.attacks.last().unwrap().damage;
+                },
+            i =>
+            {
+                self.combatants[i as usize].final_damage += attack.damage;
+                self.attacks.push(attack);
+            },
+        };
+    }
+    
+    pub fn find_combatant(&mut self, attacker: &str)
+        -> i32
+    {
+        for i in 0..self.combatants.len()
+        {
+            if self.combatants[i].name.contains(attacker)
+            {return i as i32;}
+        }
+        -1
+    }
+    
+    pub fn new(start: DateTime<UTC>)
+        -> CombatantList
+    {
+        CombatantList{combatants: Vec::new(), attacks: Vec::new(), encounter_start: start, encounter_end: start, encounter_duration: 0, highestHit: Attack::new(), highestHeal: Attack::new()}
+    }
+}
+
+impl fmt::Display for CombatantList
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        let duration = (self.encounter_end-self.encounter_start);
+        write!(f, "Encounter duration: {}:{:02}\n", duration.num_minutes(), duration.num_seconds() % 60 );
+        for i in 0..((self.combatants).len())
+        {
+            write!(f, "{}\n", ((self.combatants))[i].print( duration.num_seconds() as u64 ));
+        }
+        write!(f, "")
+    }
+}
+
+#[derive(Eq)]
+pub struct Combatant
+{
+    pub name: String,
+    pub highestHit: Attack,
+    pub highestHeal: Attack,
+    pub final_healed: u64,
+    pub final_damage: u64,
+    pub combatstart: DateTime<UTC>,
+    pub sortByDps: bool
+}
+
+impl Ord for Combatant
+{
+    fn cmp(&self, other: &Combatant) -> Ordering
+    {
+        if self.sortByDps
+        {
+            other.final_damage.cmp(&self.final_damage)
+        }
+        else
+        {
+            other.final_healed.cmp(&self.final_healed)
+        }
+    }
+}
+
+impl PartialOrd for Combatant
+{
+    fn partial_cmp(&self, other: &Combatant) -> Option<Ordering>
+    {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Combatant
+{
+    fn eq(&self, other: &Combatant) -> bool
+    {
+        if self.sortByDps
+        {
+            other.final_damage == self.final_damage
+        }
+        else
+        {
+            other.final_healed == self.final_healed
+        }
+    }
+}
+
+impl Combatant
+{
+    pub fn print(&self, encounter_duration : u64) -> String
+    {
+        let dps = match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  };
+        /*Leave this commented until heals are parsed*/
+        //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
+        //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
+        format!("{name:.*}: {dps:.1}m ", 4, name=self.name, dps=dps)
+    }
+}
+
+pub fn getTime(timestamp: &str)
+    -> DateTime<UTC>
+{
+    let timeparser = Regex::new(r"(?P<day_week>[A-Za-z]+) (?P<month>[A-Za-z]+)(  | )(?P<day_month>\d+) (?P<hour>\d+):(?P<minute>\d+):(?P<second>\d+) (?P<year>\d+)").unwrap();
+    match timeparser.captures( timestamp ) {None => {return UTC.ymd(2016, 2, 3).and_hms(0, 0, 0);}, Some(time_cap) =>
+    {
+        return UTC
+                                .ymd(
+                                    time_cap.name("year").unwrap().parse::<i32>().unwrap(),
+                                    match time_cap.name("month").unwrap() {"Jan"=>0, "Feb"=>1, "Mar"=>2, "Apr"=>3,  "May"=>4, "Jun"=>5, "Jul"=>6, "Aug"=>7, "Sep"=>8, "Oct"=>9, "Nov"=>10, "Dec"=>11, _=>0},
+                                    time_cap.name("day_month").unwrap().parse::<u32>().unwrap())
+                                .and_hms(
+                                    time_cap.name("hour").unwrap().parse::<u32>().unwrap(),
+                                    time_cap.name("minute").unwrap().parse::<u32>().unwrap(),
+                                    time_cap.name("second").unwrap().parse::<u32>().unwrap()
+                                    );
+    }};
 }
