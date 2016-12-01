@@ -70,13 +70,14 @@ impl Attack
         self.damage_type = String::from(attack_data.name("damagetype").unwrap());
     }
     
-    pub fn filter(&self, filters: &str) -> bool
+    pub fn filter(&self, filters: &str, attacker: &String) -> bool
     {
+        if !self.attacker.contains(attacker) {return false;}
         if filters.len() as i32 != 0
         {
             for filter in filters.split_whitespace()
             {
-                if !self.timestamp.contains(filter) && !self.victim.contains(filter) && !self.attack_name.contains(filter) && !self.crit.contains(filter) && !self.damage_type.contains(filter) {return false;}
+                if !self.timestamp.contains(filter) && !self.victim.contains(filter) && !self.attack_name.contains(filter) && !self.crit.contains(filter) && !self.damage_type.contains(filter)  {return false;}
             }
         }
         true
@@ -191,19 +192,6 @@ impl Attacker
         //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
         //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
         format!("{name}: {dps:.3}m ", name=self.name, dps=dps)
-    }
-    
-    pub fn print_attacks(&self, filters: &str) -> String
-    {
-        let mut results: String = String::from("");
-        for attack in &self.attacks
-        {
-            if attack.filter(filters)
-            {
-                results.push_str(&format!("{}\n", attack));
-            }
-        }
-        results
     }
 }
 
@@ -356,6 +344,19 @@ impl CombatantList
     {
         CombatantList{combatants: Vec::new(), attacks: Vec::new(), encounter_start: start, encounter_end: start, encounter_duration: 0, highestHit: Attack::new(), highestHeal: Attack::new()}
     }
+    
+    pub fn print_attacks(&self, filters: &str, player: &String) -> String
+    {
+        let mut results: String = String::from("");
+        for attack in &self.attacks
+        {
+            if attack.filter(filters, &player)
+            {
+                results.push_str(&format!("{}\n", attack));
+            }
+        }
+        results
+    }
 }
 
 impl fmt::Display for CombatantList
@@ -367,6 +368,20 @@ impl fmt::Display for CombatantList
         for i in 0..((self.combatants).len())
         {
             write!(f, "{}\n", ((self.combatants))[i].print( duration.num_seconds() as u64 ));
+        }
+        write!(f, "")
+    }
+}
+
+impl fmt::Debug for CombatantList
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        let duration = (self.encounter_end-self.encounter_start);
+        write!(f, "Encounter duration: {}:{:02}\n", duration.num_minutes(), duration.num_seconds() % 60 );
+        for i in 0..((self.combatants).len())
+        {
+            write!(f, "{}\n", ((self.combatants))[i].print_full( duration.num_seconds() as u64 ));
         }
         write!(f, "")
     }
@@ -431,6 +446,16 @@ impl Combatant
         //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
         //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
         format!("{name:.*}: {dps:.1}m ", 4, name=self.name, dps=dps)
+    }
+
+    /*This should probably be replaced by a impl fmt::Debug*/
+    pub fn print_full(&self, encounter_duration : u64) -> String
+    {
+        let dps = match encounter_duration{0=>0.0, _=>((self.final_damage / (encounter_duration)) as f64)/1000000.0  };
+        /*Leave this commented until heals are parsed*/
+        //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
+        //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
+        format!("{name}: {dps:.3}m ", name=self.name, dps=dps)
     }
 }
 

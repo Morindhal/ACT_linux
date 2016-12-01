@@ -78,19 +78,26 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
         if !ui_data.is_locked() //render normally, navigating left side
         {
             encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
-            draw = format!("{}\n", encounters[ui_data.nav_xy[0].0 as usize]);
+            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize]);
         }
         else if ui_data.nav_lock_encounter //render normally, navigation right side
         {
             encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
-            draw = format!("{}\n", encounters[(ui_data.nav_xy[0].0 )as usize]);
+            draw = format!("{:?}\n", encounters[(ui_data.nav_xy[0].0 )as usize]);
         }
         else if ui_data.nav_lock_combatant //replace right side with the combatants attacks
         {
-            /*draw = format!("{} attacks:\n{}\n", 
-                encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
-                encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].print_attacks(&ui_data.filters));*/
-            draw = format!("{}.", body);
+            encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
+            if encounters[ui_data.nav_xy[0].0 as usize].combatants.len() != 0
+            {
+                draw = format!("{} attacks:\n{}\n", 
+                    encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
+                    encounters[ui_data.nav_xy[0].0 as usize].print_attacks(&ui_data.filters, (&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name)));
+            }
+            else
+            {
+                draw = format!("{}.", body);
+            }
         }
         else
         {
@@ -288,7 +295,7 @@ fn main()
                         {
                             if !ui_data.is_locked()
                             {
-                                /*match ctx.set_contents(format!("{}", if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
+                                match ctx.set_contents(format!("{}", if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
                                 {
                                     Ok(_)=>
                                     {
@@ -296,7 +303,7 @@ fn main()
                                         speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
                                     },
                                     Err(e)=>{println!("Clipboard error: {}", e);}
-                                };*/
+                                };
                             }
                             else
                             {
