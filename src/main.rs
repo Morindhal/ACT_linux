@@ -77,13 +77,13 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
     {
         if !ui_data.is_locked() //render normally, navigating left side
         {
-            encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
-            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize]);
+            encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize].combatants.sort();
+            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]);
         }
         else if ui_data.nav_lock_encounter //render normally, navigation right side
         {
-            encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
-            draw = format!("{:?}\n", encounters[(ui_data.nav_xy[0].0 )as usize]);
+            encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize].combatants.sort();
+            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]);
         }
         else if ui_data.nav_lock_combatant //replace right side with the combatants attacks
         {
@@ -128,19 +128,24 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
     }
     
     if !encounters.is_empty()
-    {let mut bound = encounters.len();
-    if (bound as i32 - (ui_data.nav_encounter_win_scroll.0 - 2)) < 0 {bound = 0;}
-    else { bound = encounters.len() - (ui_data.nav_encounter_win_scroll.0 as usize - 2); }
-    let mut line_print = 0;
+    {
+        let mut bound:usize = 0;
+        if (bound as i32 - (ui_data.nav_encounter_win_scroll.0 - 2)) < 0 {bound = 0;}
+        else { bound = encounters.len() - (ui_data.nav_encounter_win_scroll.0 as usize - 2); }
+        let mut line_print = 1;
+
         for i in (bound)..(encounters.len() - 1)
         {// från X till encounter längd 0-3 1-4 2-5 minus scroll, 0-3 1-4-1=0-3 osv
             //if encounters.len() <= i - ui_data.nav_encounter_win_scroll.1 as usize || (i as i32 - ui_data.nav_encounter_win_scroll.1 < 0) {break;}
-            mvwprintw(encounter_win, line_print as i32 + 1, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration/60, encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration % 60 ));
+            mvwprintw(encounter_win, line_print, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration/60, encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration % 60 ));
             line_print += 1;
         }
-        wattron(encounter_win, COLOR_PAIR(1));
-        mvwprintw(encounter_win, line_print+1, 1, &format!("[ ]Duration: {}:{:02}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
-        wattroff(encounter_win, COLOR_PAIR(1));
+        if ui_data.nav_encounter_win_scroll.1 == 0
+        {
+            wattron(encounter_win, COLOR_PAIR(1));
+            mvwprintw(encounter_win, line_print, 1, &format!("[ ]Duration: {}:{:02}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
+            wattroff(encounter_win, COLOR_PAIR(1));
+        }
     }
 
     wborder(main_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
@@ -295,7 +300,7 @@ fn main()
                         {
                             if !ui_data.is_locked()
                             {
-                                match ctx.set_contents(format!("{}", if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
+                                match ctx.set_contents(format!("{}", encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
                                 {
                                     Ok(_)=>
                                     {
@@ -315,9 +320,23 @@ fn main()
                         {
                             if ui_data.nav_xy.last().unwrap().0 > 0
                             {
-                                if !ui_data.is_locked() && ui_data.nav_encounter_win_scroll.0 - encounters.len() as i32 + ui_data.nav_encounter_win_scroll.1 - 2 < 0
+                                if !ui_data.is_locked()
                                 {
-                                    ui_data.nav_encounter_win_scroll.1 += 1;
+                                    if  ui_data.nav_encounter_win_scroll.0 - 2 < encounters.len() as i32
+                                    {
+                                        if ui_data.nav_encounter_win_scroll.1 < encounters.len() as i32 - ui_data.nav_encounter_win_scroll.0 - 2
+                                        {
+                                            ui_data.nav_encounter_win_scroll.1 += 1;
+                                        }
+                                        else
+                                        {
+                                            ui_data.nav_xy.last_mut().unwrap().0 -= 1;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ui_data.nav_xy.last_mut().unwrap().0 -= 1;
+                                    }
                                 }
                                 else if ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].combatants.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
                                         ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].combatants.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
@@ -490,6 +509,7 @@ fn main()
                     let mut triggers: HashMap<&str, Regex> = HashMap::new();
                         triggers.insert("Ruling I am", Regex::new(r".*I rule.*").unwrap());
                         triggers.insert("Verily", Regex::new(r".*i also rule.*").unwrap());
+                        triggers.insert("Madness!", Regex::new(r".*Madness heals.*").unwrap());
                     for (trigger, trigged) in triggers.iter()
                     {
                         match trigged.captures(triggerbuffer.as_str()) {None => {}, Some(cap) =>
