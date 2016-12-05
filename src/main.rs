@@ -90,9 +90,12 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
             encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
             if encounters[ui_data.nav_xy[0].0 as usize].combatants.len() != 0
             {
+                /*draw = format!("{} attacks:\n{}\n", 
+                    encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
+                    encounters[ui_data.nav_xy[0].0 as usize].print_attacks(&ui_data.filters, (&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name)));*/
                 draw = format!("{} attacks:\n{}\n", 
                     encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
-                    encounters[ui_data.nav_xy[0].0 as usize].print_attacks(&ui_data.filters, (&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name)));
+                    encounters[ui_data.nav_xy[0].0 as usize].print_attack_stats(&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name.as_str()));
             }
             else
             {
@@ -134,7 +137,7 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
         else { bound = encounters.len() - (ui_data.nav_encounter_win_scroll.0 as usize - 2); }
         let mut line_print = 1;
 
-        for i in (bound)..(encounters.len() - 1)
+        for i in (bound - ui_data.nav_encounter_win_scroll.1 as usize)..(encounters.len() - 1 - ui_data.nav_encounter_win_scroll.1 as usize)
         {// från X till encounter längd 0-3 1-4 2-5 minus scroll, 0-3 1-4-1=0-3 osv
             //if encounters.len() <= i - ui_data.nav_encounter_win_scroll.1 as usize || (i as i32 - ui_data.nav_encounter_win_scroll.1 < 0) {break;}
             mvwprintw(encounter_win, line_print, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration/60, encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration % 60 ));
@@ -234,6 +237,7 @@ fn main()
 
     let (parse_tx, main_rx) = mpsc::channel::<Box<(bool,Vec<structs::Attack>)>>();
     let (user_tx, mainss_rx) = mpsc::channel();
+    //let (timer_tx, timer_rx) = mpsc::channel();
 
     let mut buffer = String::new();
     let mut battle_timer = time::Instant::now();
@@ -249,11 +253,39 @@ fn main()
         }
     });
     
+/*    let timer_counter = thread::spawn(move || 
+    {
+        let timeout = time::Duration::from_millis(500);
+        let mut time = time::Instant::now();
+        let mut timers: HashMap<&str, i32> = HashMap::new();
+        'timer: loop/*Listen to timers, give tts warning when time is up*/
+        {
+            match timer_rx.recv_timeout()
+            {
+                Ok(val) =>
+                {
+                    //add countdown timer
+                    timers.insert(val);
+                },
+                Err(e) => {}
+            }
+            for (text, time) in timers
+            {
+                if time <= 0
+                {
+                    time -= time.elapsed().as_secs();
+                    speak(&CString::new(format!("espeak \"{}\"", text)).unwrap());
+                    timers.remove(&text);
+                }
+            }
+        }
+    });*/
+
 
     let ui = thread::spawn(move ||
     {
         let mut ctx = ClipboardContext::new().unwrap();
-        let timeout = time::Duration::from_millis(10);
+        let timeout = time::Duration::from_millis(1);
         let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
         let mut encounters: Vec<structs::CombatantList> = Vec::new();
         encounters.push(structs::CombatantList::new(structs::getTime("default_time")));
@@ -535,17 +567,16 @@ fn main()
             if ui_update_timer.elapsed() >= time::Duration::from_millis(1000) && attacks.len() != 0 && !fightdone
             {
                 ui_update_timer = time::Instant::now();
-                parse_tx.send(Box::new((false, attacks.clone())));
-                attacks.clear();
+                parse_tx.send(Box::new((false, attacks.drain(0..).collect())));
             }
             /*End current encounter if nothing has been parsed in combat within the last 3 secs*/
-            if battle_timer.elapsed() >= time::Duration::from_millis(3000)
+            if battle_timer.elapsed() >= time::Duration::from_millis(3200)
             {
                 if !fightdone
                 {
                     attacks.clear();
                     fightdone = true;
-                    parse_tx.send(Box::new((fightdone, attacks.clone())));
+                    parse_tx.send(Box::new((fightdone, attacks.drain(0..).collect())));
                     break 'encounter_loop;
                 }
             }

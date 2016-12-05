@@ -52,7 +52,7 @@ pub struct Attack
     damage: u64,
     victim: String,
     pub timestamp: String,
-    attack_name: String,
+    pub attack_name: String,
     crit: String, // "" for did not crit?
     damage_type: String
 }
@@ -131,6 +131,70 @@ impl fmt::Display for Attack
         //write!(f, "{}", self.timestamp, self.victim, self.attack_name)
     }
 }
+
+
+#[derive(Eq)]
+pub struct Attack_Stats
+{
+    name: String,
+    attack: Attack,
+    totalDamage: u64
+}
+
+impl Attack_Stats
+{
+    pub fn find_attackname(&mut self, attack: &Attack)
+        -> bool
+    {
+        if self.name.contains(attack.attack_name.as_str())
+        {
+            if attack.damage > self.attack.damage
+            {self.attack = attack.clone();}
+            self.totalDamage += attack.damage;
+            true
+        }
+        else
+        {false}
+    }
+    
+    pub fn print(&self, duration: u64, allDamage: u64)
+        -> String
+    {
+        format!("{:6.2} procent of parse   {}\n", (self.totalDamage as f64 / allDamage as f64 * 100.0), self.attack)
+    }
+
+    pub fn new(attack: Attack)
+        -> Attack_Stats
+    {
+        Attack_Stats{name: attack.attack_name.clone(), attack: attack.clone(), totalDamage: attack.damage}
+    }
+
+}
+
+impl Ord for Attack_Stats
+{
+    fn cmp(&self, other: &Attack_Stats) -> Ordering
+    {
+        other.totalDamage.cmp(&self.totalDamage)
+    }
+}
+
+impl PartialOrd for Attack_Stats
+{
+    fn partial_cmp(&self, other: &Attack_Stats) -> Option<Ordering>
+    {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Attack_Stats
+{
+    fn eq(&self, other: &Attack_Stats) -> bool
+    {
+        other.totalDamage == self.totalDamage
+    }
+}
+
 
 
 #[derive(Eq)]
@@ -293,6 +357,7 @@ pub struct CombatantList
 {
     pub combatants: Vec<Combatant>,
     pub attacks: Vec<Attack>,
+    pub attack_stats: Vec<Attack_Stats>,
     pub encounter_start: DateTime<UTC>,
     pub encounter_end: DateTime<UTC>,
     pub encounter_duration: u64,
@@ -307,22 +372,34 @@ impl CombatantList
         if self.attacks.len() == 0
         {self.encounter_start = getTime(attack.timestamp.as_str());}
         self.encounter_end = getTime(attack.timestamp.as_str());
-        //Check if attacker in already in the CombatantList
-            //If not, push a new attacker
-        //encounter_start needed, don't do this here but modify the field directly from main.rs when a new encounter is started
-        //Check if the new Attack is higher than the highestHit, if so replace this Attack with a new Attack
-            //same as above but with heal
+
+        
+        /*enter the attack data into a list that keeps track of specific attacks
+        * This list MUST also be entered on a player-level, create one list-struct for both?
+        */
+        {
+            let mut exists = false;
+            for stats in self.attack_stats.iter_mut()
+            {
+                exists = stats.find_attackname(&attack);
+                if exists {break;}
+            }
+            if !exists
+            {self.attack_stats.push(Attack_Stats::new(attack.clone()));}
+        }
         match self.find_combatant(attack.attacker.as_str())
         {
             -1 =>/*New attacker*/
                 {
-                    self.combatants.push(Combatant{name: attack.attacker.clone(), highestHit: Attack::new(), highestHeal: Attack::new(), final_healed: 0, final_damage: 0, combatstart: getTime(attack.timestamp.as_str()), sortByDps: true});
+                    self.combatants.push(Combatant{name: attack.attacker.clone(), highestHit: Attack::new(), highestHeal: Attack::new(), final_healed: 0, final_damage: 0, attack_stats: Vec::new(), combatstart: getTime(attack.timestamp.as_str()), sortByDps: true});
+                    self.combatants.last_mut().unwrap().attack(&attack);
                     self.attacks.push(attack);
                     self.combatants.last_mut().unwrap().final_damage += self.attacks.last().unwrap().damage;
                 },
             i =>
             {
                 self.combatants[i as usize].final_damage += attack.damage;
+                self.combatants[i as usize].attack(&attack);
                 self.attacks.push(attack);
             },
         };
@@ -342,7 +419,7 @@ impl CombatantList
     pub fn new(start: DateTime<UTC>)
         -> CombatantList
     {
-        CombatantList{combatants: Vec::new(), attacks: Vec::new(), encounter_start: start, encounter_end: start, encounter_duration: 0, highestHit: Attack::new(), highestHeal: Attack::new()}
+        CombatantList{combatants: Vec::new(), attacks: Vec::new(), attack_stats: Vec::new(), encounter_start: start, encounter_end: start, encounter_duration: 0, highestHit: Attack::new(), highestHeal: Attack::new()}
     }
     
     pub fn print_attacks(&self, filters: &str, player: &String) -> String
@@ -353,6 +430,22 @@ impl CombatantList
             if attack.filter(filters, &player)
             {
                 results.push_str(&format!("{}\n", attack));
+            }
+        }
+        results
+    }
+
+    pub fn print_attack_stats(&self, player: &str) -> String
+    {
+        let mut results: String = String::from("");
+        for combatant in &self.combatants
+        {
+            if combatant.name.contains(player)
+            {
+                for stats in &combatant.attack_stats
+                {
+                    results.push_str(&format!("{}", stats.print((self.encounter_end-self.encounter_start).num_seconds() as u64, combatant.final_damage)));
+                }
             }
         }
         results
@@ -395,6 +488,7 @@ pub struct Combatant
     pub highestHeal: Attack,
     pub final_healed: u64,
     pub final_damage: u64,
+    pub attack_stats: Vec<Attack_Stats>,
     pub combatstart: DateTime<UTC>,
     pub sortByDps: bool
 }
@@ -456,6 +550,29 @@ impl Combatant
         //let hps = match encounter_duration{0=>0.0, _=>((self.final_healed / (encounter_duration)) as f64)/1000.0  };
         //format!("{name:.*}: {dps:.1}m | {hps}k", 4, name=self.name, dps=dps, hps=hps)
         format!("{name}: {dps:.3}m ", name=self.name, dps=dps)
+    }
+
+/*    pub fn print_attack_stats(&self, encounter_duration : u64) -> String
+    {
+        let mut results: String = String::from("");
+        for stats in &self.attack_stats
+        {
+            results.push_str(&format!("{}", stats.print(encounter_duration));
+        }
+        results
+    }*/
+    
+    pub fn attack(&mut self, attack: &Attack)
+    {
+        let mut exists = false;
+        for stats in self.attack_stats.iter_mut()
+        {
+            exists = stats.find_attackname(&attack);
+            if exists {break;}
+        }
+        if !exists
+        {self.attack_stats.push(Attack_Stats::new(attack.clone()));}
+        self.attack_stats.sort();
     }
 }
 
