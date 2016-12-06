@@ -146,7 +146,7 @@ impl Attack_Stats
     pub fn find_attackname(&mut self, attack: &Attack)
         -> bool
     {
-        if self.name.contains(attack.attack_name.as_str())
+        if self.name == attack.attack_name
         {
             if attack.damage > self.attack.damage
             {self.attack = &attack;}
