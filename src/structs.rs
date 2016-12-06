@@ -385,7 +385,7 @@ impl CombatantList
                 if exists {break;}
             }
             if !exists
-            {self.attack_stats.push(Attack_Stats::new(attack.clone()));}
+            {self.attack_stats.push(Attack_Stats::new(&attack));}
         }
         match self.find_combatant(attack.attacker.as_str())
         {
@@ -410,7 +410,7 @@ impl CombatantList
     {
         for i in 0..self.combatants.len()
         {
-            if self.combatants[i].name.contains(attacker)
+            if self.combatants[i].name == attacker
             {return i as i32;}
         }
         -1
@@ -440,7 +440,7 @@ impl CombatantList
         let mut results: String = String::from("");
         for combatant in &self.combatants
         {
-            if combatant.name.contains(player)
+            if combatant.name == player
             {
                 for stats in &combatant.attack_stats
                 {
@@ -571,7 +571,7 @@ impl Combatant
             if exists {break;}
         }
         if !exists
-        {self.attack_stats.push(Attack_Stats::new(attack.clone()));}
+        {self.attack_stats.push(Attack_Stats::new(&attack));}
         self.attack_stats.sort();
     }
 }
