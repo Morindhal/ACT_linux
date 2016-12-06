@@ -137,7 +137,7 @@ impl fmt::Display for Attack
 pub struct Attack_Stats
 {
     name: String,
-    attack: Attack,
+    attack: &Attack,
     totalDamage: u64
 }
 
@@ -149,7 +149,7 @@ impl Attack_Stats
         if self.name.contains(attack.attack_name.as_str())
         {
             if attack.damage > self.attack.damage
-            {self.attack = attack.clone();}
+            {self.attack = &attack;}
             self.totalDamage += attack.damage;
             true
         }
@@ -163,10 +163,10 @@ impl Attack_Stats
         format!("{:6.2} procent of parse   {}\n", (self.totalDamage as f64 / allDamage as f64 * 100.0), self.attack)
     }
 
-    pub fn new(attack: Attack)
+    pub fn new(attack: &Attack)
         -> Attack_Stats
     {
-        Attack_Stats{name: attack.attack_name.clone(), attack: attack.clone(), totalDamage: attack.damage}
+        Attack_Stats{name: attack.attack_name.clone(), attack: &attack, totalDamage: attack.damage}
     }
 
 }

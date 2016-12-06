@@ -7,6 +7,6 @@ authors = ["Morindhal <Morindhal@gmail.com>"]
 regex = "*"
 chrono = "0.2"
 libc = "*"
-clap = "*"
+clap = "2.19.1"
 clipboard = "*"
 ncurses = "5.83.0"
