@@ -137,36 +137,36 @@ impl fmt::Display for Attack
 pub struct Attack_Stats
 {
     name: String,
-    attack: &Attack,
+    attackNmbr: usize,
     totalDamage: u64
 }
 
 impl Attack_Stats
 {
-    pub fn find_attackname(&mut self, attack: &Attack)
+    pub fn find_attackname(&mut self, attacks: &Vec<Attack>, attackNmbr: usize)
         -> bool
     {
-        if self.name == attack.attack_name
+        if self.name == attacks[attackNmbr].attack_name
         {
-            if attack.damage > self.attack.damage
-            {self.attack = &attack;}
-            self.totalDamage += attack.damage;
+            if attacks[self.attackNmbr].damage > attacks[attackNmbr].damage
+            {self.attackNmbr = attackNmbr;}
+            self.totalDamage += attacks[attackNmbr].damage;
             true
         }
         else
         {false}
     }
     
-    pub fn print(&self, duration: u64, allDamage: u64)
+    pub fn print(&self, duration: u64, allDamage: u64, attacks: &Vec<Attack>)
         -> String
     {
-        format!("{:6.2} procent of parse   {}\n", (self.totalDamage as f64 / allDamage as f64 * 100.0), self.attack)
+        format!("{:6.2} procent of parse   {}\n", (self.totalDamage as f64 / allDamage as f64 * 100.0), (attacks[self.attackNmbr]))
     }
 
-    pub fn new(attack: &Attack)
+    pub fn new(attacks: &Vec<Attack>, attackNmbr: usize)
         -> Attack_Stats
     {
-        Attack_Stats{name: attack.attack_name.clone(), attack: &attack, totalDamage: attack.damage}
+        Attack_Stats{name: attacks[attackNmbr].attack_name.clone(), attackNmbr: attackNmbr, totalDamage: attacks[attackNmbr].damage}
     }
 
 }
@@ -367,13 +367,29 @@ pub struct CombatantList
 
 impl CombatantList
 {
-    pub fn attack(&mut self, attack: Attack)
+    pub fn attack(&mut self, mut attack: Attack)
     {
         if self.attacks.len() == 0
         {self.encounter_start = getTime(attack.timestamp.as_str());}
         self.encounter_end = getTime(attack.timestamp.as_str());
 
         
+        match self.find_combatant(attack.attacker.as_str())
+        {
+            -1 =>/*New attacker*/
+                {
+                    self.combatants.push(Combatant{name: attack.attacker.clone(), highestHit: Attack::new(), highestHeal: Attack::new(), final_healed: 0, final_damage: 0, attack_stats: Vec::new(), combatstart: getTime(attack.timestamp.as_str()), sortByDps: true});
+                    self.attacks.push(attack);
+                    self.combatants.last_mut().unwrap().attack(&self.attacks, self.attacks.len()-1);
+                    self.combatants.last_mut().unwrap().final_damage += self.attacks.last().unwrap().damage;
+                },
+            i =>
+            {
+                self.combatants[i as usize].final_damage += attack.damage;
+                self.attacks.push(attack);
+                self.combatants[i as usize].attack(&self.attacks, self.attacks.len()-1);
+            },
+        };
         /*enter the attack data into a list that keeps track of specific attacks
         * This list MUST also be entered on a player-level, create one list-struct for both?
         */
@@ -381,28 +397,12 @@ impl CombatantList
             let mut exists = false;
             for stats in self.attack_stats.iter_mut()
             {
-                exists = stats.find_attackname(&attack);
+                exists = stats.find_attackname(&self.attacks, self.attacks.len()-1);
                 if exists {break;}
             }
             if !exists
-            {self.attack_stats.push(Attack_Stats::new(&attack));}
+            {self.attack_stats.push(Attack_Stats::new(&self.attacks, self.attacks.len()-1));}
         }
-        match self.find_combatant(attack.attacker.as_str())
-        {
-            -1 =>/*New attacker*/
-                {
-                    self.combatants.push(Combatant{name: attack.attacker.clone(), highestHit: Attack::new(), highestHeal: Attack::new(), final_healed: 0, final_damage: 0, attack_stats: Vec::new(), combatstart: getTime(attack.timestamp.as_str()), sortByDps: true});
-                    self.combatants.last_mut().unwrap().attack(&attack);
-                    self.attacks.push(attack);
-                    self.combatants.last_mut().unwrap().final_damage += self.attacks.last().unwrap().damage;
-                },
-            i =>
-            {
-                self.combatants[i as usize].final_damage += attack.damage;
-                self.combatants[i as usize].attack(&attack);
-                self.attacks.push(attack);
-            },
-        };
     }
     
     pub fn find_combatant(&mut self, attacker: &str)
@@ -444,7 +444,7 @@ impl CombatantList
             {
                 for stats in &combatant.attack_stats
                 {
-                    results.push_str(&format!("{}", stats.print((self.encounter_end-self.encounter_start).num_seconds() as u64, combatant.final_damage)));
+                    results.push_str(&format!("{}", stats.print((self.encounter_end-self.encounter_start).num_seconds() as u64, combatant.final_damage, &self.attacks)));
                 }
             }
         }
@@ -562,16 +562,16 @@ impl Combatant
         results
     }*/
     
-    pub fn attack(&mut self, attack: &Attack)
+    pub fn attack(&mut self, mut attacks: &Vec<Attack>, attackNmbr: usize)
     {
         let mut exists = false;
         for stats in self.attack_stats.iter_mut()
         {
-            exists = stats.find_attackname(&attack);
+            exists = stats.find_attackname(&attacks, attackNmbr);
             if exists {break;}
         }
         if !exists
-        {self.attack_stats.push(Attack_Stats::new(&attack));}
+        {self.attack_stats.push(Attack_Stats::new(&attacks, attackNmbr));}
         self.attack_stats.sort();
     }
 }

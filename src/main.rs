@@ -302,7 +302,7 @@ fn main()
                     }
                     if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
                     {
-                        if encounters.last().unwrap().attacks.len() != 0
+                        if encounters.last().unwrap().attacks.len() != 0 && !ui_data.is_locked()
                         {
                             ui_data.nav_xy[0].0 = encounters.len() as i32 - 1;
                             ui_data.nav_encounter_win_scroll.1 = 0;
