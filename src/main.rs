@@ -90,12 +90,18 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
             encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
             if encounters[ui_data.nav_xy[0].0 as usize].combatants.len() != 0
             {
-                /*draw = format!("{} attacks:\n{}\n", 
-                    encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
-                    encounters[ui_data.nav_xy[0].0 as usize].print_attacks(&ui_data.filters, (&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name)));*/
-                draw = format!("{} attacks:\n{}\n", 
-                    encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
-                    encounters[ui_data.nav_xy[0].0 as usize].print_attack_stats(&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name.as_str()));
+                if ui_data.filters.len() != 0
+                {
+                    draw = format!("{} attacks:\n{}\n", 
+                        encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
+                        encounters[ui_data.nav_xy[0].0 as usize].print_attacks(&ui_data.filters, (&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name)));
+                }
+                else
+                {
+                    draw = format!("{} attacks:\n{}\n", 
+                        encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
+                        encounters[ui_data.nav_xy[0].0 as usize].print_attack_stats(&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name.as_str()));
+                }
             }
             else
             {
