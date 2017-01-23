@@ -5,7 +5,7 @@ authors = ["Morindhal <Morindhal@gmail.com>"]
 
 [dependencies]
 regex = "*"
-chrono = "0.2"
+chrono = "0.2.0"
 libc = "*"
 clap = "2.19.1"
 clipboard = "*"

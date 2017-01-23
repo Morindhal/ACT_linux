@@ -62,12 +62,12 @@ impl Attack
     pub fn attack(&mut self, attack_data: &regex::Captures, attacker: &str)
     {
         self.attacker = String::from(attacker);
-        self.damage = attack_data.name("damage").unwrap().parse::<u64>().unwrap();
-        self.victim = String::from(attack_data.name("target").unwrap());
-        self.timestamp = String::from(attack_data.name("datetime").unwrap());
-        self.attack_name = String::from(match attack_data.name("attack").unwrap() { "" => "auto attack", val => val } );
-        self.crit = String::from(attack_data.name("crittype").unwrap());
-        self.damage_type = String::from(attack_data.name("damagetype").unwrap());
+        self.damage = attack_data.name("damage").unwrap().as_str().parse::<u64>().unwrap();
+        self.victim = String::from(attack_data.name("target").unwrap().as_str());
+        self.timestamp = String::from(attack_data.name("datetime").unwrap().as_str());
+        self.attack_name = String::from(match attack_data.name("attack").unwrap().as_str() { "" => "auto attack", val => val } );
+        self.crit = String::from(attack_data.name("crittype").unwrap().as_str());
+        self.damage_type = String::from(attack_data.name("damagetype").unwrap().as_str());
     }
     
     pub fn filter(&self, filters: &str, attacker: &String) -> bool
@@ -148,7 +148,7 @@ impl Attack_Stats
     {
         if self.name == attacks[attackNmbr].attack_name
         {
-            if attacks[self.attackNmbr].damage > attacks[attackNmbr].damage
+            if attacks[self.attackNmbr].damage < attacks[attackNmbr].damage
             {self.attackNmbr = attackNmbr;}
             self.totalDamage += attacks[attackNmbr].damage;
             true
@@ -235,7 +235,7 @@ impl Attacker
     pub fn attack(&mut self, attack_data: &regex::Captures)
     {
         //self.attacks.push(Attack{damage: attack_data.name("damage").unwrap().parse::<u64>().unwrap(), victim: String::from(attack_data.name("target").unwrap()), timestamp: String::from(attack_data.name("datetime").unwrap()), attack_name: String::from(match attack_data.name("attack").unwrap() { "" => "auto attack", val => val } ), crit: String::from(attack_data.name("crittype").unwrap()), damage_type: String::from(attack_data.name("damagetype").unwrap())});
-        self.final_damage += attack_data.name("damage").unwrap().parse::<u64>().unwrap();
+        self.final_damage += attack_data.name("damage").unwrap().as_str().parse::<u64>().unwrap();
     }
     
     /*This should probably be replaced by a impl fmt::Display*/
@@ -302,7 +302,7 @@ impl Encounter
     
     pub fn attack(&mut self, attack_data: regex::Captures)
     {
-        let attacker_name = match attack_data.name("attacker").unwrap() { "" => self.player.as_str(), var => var};
+        let attacker_name = match attack_data.name("attacker").unwrap().as_str() { "" => self.player.as_str(), var => var};
         if self.exists(attacker_name) == -1
         {
             (self.attackers).push(Attacker{attacks: Vec::new(), final_damage: 0, final_healed: 0, name: String::from(attacker_name)});
@@ -584,13 +584,13 @@ pub fn getTime(timestamp: &str)
     {
         return UTC
                                 .ymd(
-                                    time_cap.name("year").unwrap().parse::<i32>().unwrap(),
-                                    match time_cap.name("month").unwrap() {"Jan"=>1, "Feb"=>2, "Mar"=>3, "Apr"=>4,  "May"=>5, "Jun"=>6, "Jul"=>7, "Aug"=>8, "Sep"=>9, "Oct"=>10, "Nov"=>11, "Dec"=>12, _=>1},
-                                    time_cap.name("day_month").unwrap().parse::<u32>().unwrap())
+                                    time_cap.name("year").unwrap().as_str().parse::<i32>().unwrap(),
+                                    match time_cap.name("month").unwrap().as_str() {"Jan"=>1, "Feb"=>2, "Mar"=>3, "Apr"=>4,  "May"=>5, "Jun"=>6, "Jul"=>7, "Aug"=>8, "Sep"=>9, "Oct"=>10, "Nov"=>11, "Dec"=>12, _=>1},
+                                    time_cap.name("day_month").unwrap().as_str().parse::<u32>().unwrap())
                                 .and_hms(
-                                    time_cap.name("hour").unwrap().parse::<u32>().unwrap(),
-                                    time_cap.name("minute").unwrap().parse::<u32>().unwrap(),
-                                    time_cap.name("second").unwrap().parse::<u32>().unwrap()
+                                    time_cap.name("hour").unwrap().as_str().parse::<u32>().unwrap(),
+                                    time_cap.name("minute").unwrap().as_str().parse::<u32>().unwrap(),
+                                    time_cap.name("second").unwrap().as_str().parse::<u32>().unwrap()
                                     );
     }};
 }

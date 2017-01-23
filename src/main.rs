@@ -226,7 +226,7 @@ fn main()
     let player_display = String::from(player);
     let f = File::open(from_file).unwrap();
     
-    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU | )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) for(?P<crittype>\D*)( of | )(?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
+    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) for(?P<crittype>\D*)( of | )(?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
     let mut file = BufReader::new(&f);
     /*jump to the end of the file, negative value here will go to the nth character before the end of file.. Positive values are not encouraged.*/
     file.seek(SeekFrom::End(0));
@@ -560,7 +560,7 @@ fn main()
                 {
                     fightdone = false;
                     attacks.push(structs::Attack::new());
-                    attacks.last_mut().unwrap().attack(&cap, match cap.name("attacker").unwrap() { "" => player, var => var});
+                    attacks.last_mut().unwrap().attack(&cap, match cap.name("attacker").unwrap().as_str() { "" => player, var => var});
                     //encounter.encounter_end = parsed_time; //assume every line ends the encounter, likely not optimal, needs to be overhauled
                     battle_timer = time::Instant::now();
                 }};
