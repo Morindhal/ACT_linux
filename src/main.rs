@@ -1,43 +1,30 @@
-#![feature(insert_str)]
-
-extern crate regex;
-extern crate chrono;
 extern crate libc;
 extern crate clap;
 extern crate clipboard;
 extern crate ncurses;
+extern crate mmo_parser_backend;
 
-use std::mem;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{self, RecvTimeoutError};
-
-use regex::{Regex};
-use std::collections::HashMap;
-
-use chrono::*;
 
 use libc::system;
 use std::ffi::{CString, CStr};
 use std::os::raw::c_char;
 
-use clap::{Arg};
-use clap::App;
+use clap::{Arg, App};
 
 use clipboard::ClipboardContext;
 
 use ncurses::*;
 
-use std::io;
-use std::io::prelude::*;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::SeekFrom;
-
 use std::fmt;
 
 use std::{thread, time};
 
+
 mod structs;
+
+use mmo_parser_backend::eventloop::EventLoop;
+
 
 static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
 
@@ -48,170 +35,16 @@ fn speak(data: &CStr) {
 }
 
 
-fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encounters: &mut Vec<structs::CombatantList>)
-{
-    let mut max_x = 0;
-    let mut max_y = 0;
-    getmaxyx(stdscr(), &mut max_y, &mut max_x);
-//    max_y = 5;
-    ui_data.nav_main_win_scroll.0 = max_y - 22;
-    ui_data.nav_encounter_win_scroll.0 = max_y - 22;
-//-22
-
-    let mut main_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
-    let mut header_win = newwin(20, max_x, 0, 0);
-    let mut encounter_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
-
-    wclear(main_win);
-    wclear(header_win);
-    wclear(encounter_win);
-
-    
-    wmove(header_win, 1, 1);
-    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tTAB to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
-    wprintw(header_win, " Filters: ");
-    wprintw(header_win, &ui_data.filters);
-
-    let mut draw = String::from("");
-    if !ui_data.debug
-    {
-        if !ui_data.is_locked() //render normally, navigating left side
-        {
-            encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize].combatants.sort();
-            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]);
-        }
-        else if ui_data.nav_lock_encounter //render normally, navigation right side
-        {
-            encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize].combatants.sort();
-            draw = format!("{:?}\n", encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]);
-        }
-        else if ui_data.nav_lock_combatant //replace right side with the combatants attacks
-        {
-            encounters[ui_data.nav_xy[0].0 as usize].combatants.sort();
-            if encounters[ui_data.nav_xy[0].0 as usize].combatants.len() != 0
-            {
-                if ui_data.filters.len() != 0
-                {
-                    draw = format!("{} attacks:\n{}\n", 
-                        encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
-                        encounters[ui_data.nav_xy[0].0 as usize].print_attacks(&ui_data.filters, (&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name)));
-                }
-                else
-                {
-                    draw = format!("{} attacks:\n{}\n", 
-                        encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name,
-                        encounters[ui_data.nav_xy[0].0 as usize].print_attack_stats(&encounters[ui_data.nav_xy[0].0 as usize].combatants[ui_data.nav_xy[1].0 as usize].name.as_str()));
-                }
-            }
-            else
-            {
-                draw = format!("{}.", body);
-            }
-        }
-        else
-        {
-            draw = format!("{}.", body);
-        }
-    }
-    else
-    {
-        draw = format!("{}.", body);
-    }
-
-    wmove(main_win, 1, 1);
-    wattron(main_win, A_BOLD());
-    wprintw(main_win, "\tEncounters:\n\n");
-    wattroff(main_win, A_BOLD());
-    for line in draw.lines()
-    {
-        if line.contains(highlight)
-        {
-            wattron(main_win, COLOR_PAIR(1));
-            wprintw(main_win, &if ui_data.nav_lock_encounter {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
-            wattroff(main_win, COLOR_PAIR(1));
-        }
-        else
-        {
-            wprintw(main_win, &if ui_data.nav_lock_encounter {format!(" [ ]{}\n", line)} else {format!("    {}\n", line)});
-        }
-    }
-    
-    if !encounters.is_empty()
-    {
-        let mut bound:usize = 0;
-        if (bound as i32 - (ui_data.nav_encounter_win_scroll.0 - 2)) < 0 {bound = 0;}
-        else { bound = encounters.len() - (ui_data.nav_encounter_win_scroll.0 as usize - 2); }
-        let mut line_print = 1;
-
-        for i in (bound - ui_data.nav_encounter_win_scroll.1 as usize)..(encounters.len() - 1 - ui_data.nav_encounter_win_scroll.1 as usize)
-        {// från X till encounter längd 0-3 1-4 2-5 minus scroll, 0-3 1-4-1=0-3 osv
-            //if encounters.len() <= i - ui_data.nav_encounter_win_scroll.1 as usize || (i as i32 - ui_data.nav_encounter_win_scroll.1 < 0) {break;}
-            mvwprintw(encounter_win, line_print, 1, &format!("[ ]Duration: {}:{:02}\n", encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration/60, encounters[i - ui_data.nav_encounter_win_scroll.1 as usize].encounter_duration % 60 ));
-            line_print += 1;
-        }
-        if ui_data.nav_encounter_win_scroll.1 == 0
-        {
-            wattron(encounter_win, COLOR_PAIR(1));
-            mvwprintw(encounter_win, line_print, 1, &format!("[ ]Duration: {}:{:02}\n", encounters.last().unwrap().encounter_duration/60, encounters.last().unwrap().encounter_duration % 60 ));
-            wattroff(encounter_win, COLOR_PAIR(1));
-        }
-    }
-
-    wborder(main_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
-    wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
-    wborder(encounter_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
-
-    wrefresh(main_win);
-    wrefresh(header_win);
-    wrefresh(encounter_win);
-
-
-    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 3 } else { ui_data.nav_xy[0].0 } , 2);
-    if ui_data.nav_lock_refresh
-    {
-        waddch(encounter_win, 'O' as chtype);
-    }
-    else
-    {
-        waddch(encounter_win, 'X' as chtype);
-    }
-    wmove(encounter_win, 1+ if ui_data.nav_xy[0].0 >= (ui_data.nav_encounter_win_scroll.0 - 2) { ui_data.nav_encounter_win_scroll.0 - 3 } else { ui_data.nav_xy[0].0 } , 2);
-    wrefresh(encounter_win);
-
-    if ui_data.nav_lock_encounter
-    {
-        //inspect encounter, mark individual attackers
-        wmove(main_win, 4+ui_data.nav_xy[1].0, 2);
-        waddch(main_win, 'X' as chtype);
-        wmove(main_win, 4+ui_data.nav_xy[1].0, 2);
-        wrefresh(main_win);
-    }
-    else if ui_data.nav_lock_combatant
-    {
-        wmove(main_win, 1+ui_data.nav_xy[2].0, 2);
-        waddch(main_win, 'X' as chtype);
-        wmove(main_win, 1+ui_data.nav_xy[2].0, 2);
-        wrefresh(main_win);
-    }
-    
-    if ui_data.nav_lock_filter
-    {
-        wmove(header_win, 10, 10+ui_data.filters.len() as i32);
-        wrefresh(header_win);
-    }
-
-    delwin(main_win);
-    delwin(header_win);
-    delwin(encounter_win);
-}
-
 
 fn main()
 {
-    let matches = App::new("ACT_linux")
+    let matches = App::new("mmo_parser_cli")
         .version("0.1.0")
         .author("Bergman. <Morindhal@gmail.com>")
-        .about("Parses EQ2 logs")
+        .about("Parses MMO logs")
+            ,arg(Argh::with_name("GAME"))
+                .help("Sets the game to parse, EQ2 is default")
+                .required(false)
             .arg(Arg::with_name("FILE")
                 .help("Sets the log-file to use")
                 .required(true)
@@ -224,14 +57,9 @@ fn main()
     let from_file = matches.value_of("FILE").unwrap();
     let player = matches.value_of("player").unwrap();
     let player_display = String::from(player);
-    let f = File::open(from_file).unwrap();
-    
-    let re = Regex::new(r"\((?P<time>\d+)\)\[(?P<datetime>(\D|\d)+)\] (?P<attacker>\D*?)(' |'s |YOUR |YOU )(?P<attack>\D*)(((multi attack)|hits|hit|flurry|(aoe attack)|flurries|(multi attacks)|(aoe attacks))|(( multi attacks)| hits| hit)) (?P<target>\D+) for(?P<crittype>\D*)( of | )(?P<damage>\d+) (?P<damagetype>[A-Za-z]+) damage").unwrap();
-    let mut file = BufReader::new(&f);
-    /*jump to the end of the file, negative value here will go to the nth character before the end of file.. Positive values are not encouraged.*/
-    file.seek(SeekFrom::End(0));
 
 
+    let (send_data_request, recieve_answer) = EventLoop::spawn_parser(String::from(from_file), String::from(player));
 
     /*start the n-curses UI*/
     initscr();
@@ -241,21 +69,16 @@ fn main()
     init_pair(1, COLOR_RED, COLOR_BLACK);
 
 
-    let (parse_tx, main_rx) = mpsc::channel::<Box<(bool,Vec<structs::Attack>)>>();
-    let (user_tx, mainss_rx) = mpsc::channel();
+    let (input_recieve, input_send) = mpsc::channel();
     //let (timer_tx, timer_rx) = mpsc::channel();
 
-    let mut buffer = String::new();
-    let mut battle_timer = time::Instant::now();
-    let mut ui_update_timer = time::Instant::now();
-    let mut fightdone = true;
     
     
     let buttonlistener = thread::spawn(move || 
     {
         'input: loop/*Listen to input, send input to main*/
         {
-            user_tx.send(getch()).unwrap();
+            input_send.send(getch()).unwrap();
         }
     });
     
@@ -264,7 +87,7 @@ fn main()
         let timeout = time::Duration::from_millis(500);
         let mut time = time::Instant::now();
         let mut timers: HashMap<&str, i32> = HashMap::new();
-        'timer: loop/*Listen to timers, give tts warning when time is up*/
+        'timer: loop//Listen to timers, give tts warning when time is up
         {
             match timer_rx.recv_timeout()
             {
@@ -293,39 +116,18 @@ fn main()
         let mut ctx = ClipboardContext::new().unwrap();
         let timeout = time::Duration::from_millis(1);
         let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
-        let mut encounters: Vec<structs::CombatantList> = Vec::new();
-        encounters.push(structs::CombatantList::new(structs::getTime("default_time")));
         let mut update_ui = true;
         'ui: loop
         {
-            match main_rx.recv_timeout(timeout)
+            if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
             {
-                Ok(val) => 
+                if encounters.last().unwrap().attacks.len() != 0 && !ui_data.is_locked()
                 {
-                    if val.0
-                    {
-                        encounters.push(structs::CombatantList::new(structs::getTime("default_time")));
-                    }
-                    if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
-                    {
-                        if encounters.last().unwrap().attacks.len() != 0 && !ui_data.is_locked()
-                        {
-                            ui_data.nav_xy[0].0 = encounters.len() as i32 - 1;
-                            ui_data.nav_encounter_win_scroll.1 = 0;
-                        }
-                    }
-                    for attack in val.1
-                    {
-                        encounters.last_mut().unwrap().attack(attack);
-                    }
-                    if encounters.len() != 0
-                    {encounters.last_mut().unwrap().encounter_duration = (encounters.last().unwrap().encounter_end-encounters.last().unwrap().encounter_start).num_seconds() as u64;}
-                    update_ui = true;
-                },
-                Err(e) => {}
+                    ui_data.nav_xy[0].0 = encounters.len() as i32 - 1;
+                    ui_data.nav_encounter_win_scroll.1 = 0;
+                }
             }
-
-            match mainss_rx.recv_timeout(timeout)
+            match input_recieve.recv_timeout(timeout)
             {
                 Ok(val) => match val
                     {
@@ -523,6 +325,16 @@ fn main()
                     },
                 Err(e) => {}
             }
+            /*
+            /*parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend
+            /*parse the response and update the display.
+            /*
+            /*do this procedure ONLY if a request for new data has been sent.
+            /*
+            /*poll for update every X secs.
+            /*OR
+            /*listen to updates from the parser.
+            */
             if update_ui && !encounters.is_empty()
             {
                 ui_update(&format!(""), &player_display, &mut ui_data, &mut encounters);
@@ -531,63 +343,6 @@ fn main()
         }
     });
 
-    let mut attacks: Vec<structs::Attack> = Vec::new();
-    'parser: loop/*Parse file, send results to main every X secs*/
-    {
-        'encounter_loop: loop
-        {
-            buffer.clear();
-            if file.read_line(&mut buffer).unwrap() > 0
-            {
-                /*Spawn a seperate thread to deal with the triggers*/
-                let triggerbuffer = buffer.clone();
-                thread::spawn( move || 
-                {
-                    /*The container for the triggers, the key is what the tts should say, the value is the regex that is matched.*/
-                    let mut triggers: HashMap<&str, Regex> = HashMap::new();
-                        triggers.insert("Ruling I am", Regex::new(r".*I rule.*").unwrap());
-                        triggers.insert("Verily", Regex::new(r".*i also rule.*").unwrap());
-                        triggers.insert("Madness!", Regex::new(r".*Madness heals.*").unwrap());
-                    for (trigger, trigged) in triggers.iter()
-                    {
-                        match trigged.captures(triggerbuffer.as_str()) {None => {}, Some(cap) =>
-                        {
-                            speak(&CString::new(format!("espeak \"{}\"", trigger)).unwrap());
-                        }};
-                    }
-                });
-                match re.captures(buffer.as_str()) {None => {/*println!("{}",buffer);*/}, Some(cap) =>
-                {
-                    fightdone = false;
-                    attacks.push(structs::Attack::new());
-                    attacks.last_mut().unwrap().attack(&cap, match cap.name("attacker").unwrap().as_str() { "" => player, var => var});
-                    //encounter.encounter_end = parsed_time; //assume every line ends the encounter, likely not optimal, needs to be overhauled
-                    battle_timer = time::Instant::now();
-                }};
-            }
-            else /*Sleep for 0.1 sec if nothing has happened in the log-file*/
-            {
-                thread::sleep(time::Duration::from_millis(100));
-            }
-            /*update the UI, once every 1 sec*/
-            if ui_update_timer.elapsed() >= time::Duration::from_millis(1000) && attacks.len() != 0 && !fightdone
-            {
-                ui_update_timer = time::Instant::now();
-                parse_tx.send(Box::new((false, attacks.drain(0..).collect())));
-            }
-            /*End current encounter if nothing has been parsed in combat within the last 3 secs*/
-            if battle_timer.elapsed() >= time::Duration::from_millis(3200)
-            {
-                if !fightdone
-                {
-                    attacks.clear();
-                    fightdone = true;
-                    parse_tx.send(Box::new((fightdone, attacks.drain(0..).collect())));
-                    break 'encounter_loop;
-                }
-            }
-        }
-    }
 }
 
 /*
@@ -599,14 +354,14 @@ fn main()
 (1478132824)[Thu Nov  3 01:27:04 2016] Devorstator's Impatience heals Devorstator for 43947 hit points.
 YOU aoe attack training dummy for a critical of 204585 heat damage.
 
-Enemy attacks are mis-parsed when they have a space in their name:
-a deadwood harbinger gets parsed as name: "a" and attack_name: "deadwood harbinger"
-this needs to be fixed in the regex when time allows, not that important at the moment though.
-
-Attacks does not currently catch the "status", meaning if they double attack, flurry or AOE attack. This needs to be added.
-
-attackers.print_attacks(filters: String) currently returns a printable string, this may need to change to a string vector to enable scrolling in the window and listing the line numbers.
 
 println!("{}",buffer) <-- add this to the match X.captures() statement in the None body. Also needs to disable the code in the ui_update function.
+
+send a request-JSON-object to the parser, this contains a wish-list of what I want.
+    The response is then forwarded to the update_ui function and drawn.
+        This has the benefit of being doable even if the response doesn't exactly match expectations.
+    This request changes depending on user input.
+        Limit how many resonses that are wanted by low+count.
+
 
 */

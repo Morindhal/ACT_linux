@@ -1,12 +1,12 @@
 [package]
-name = "ACT_linux"
+name = "mmo_parser_cli"
 version = "0.1.0"
 authors = ["Morindhal <Morindhal@gmail.com>"]
 
 [dependencies]
-regex = "*"
-chrono = "0.2.0"
+mmo_parser_backend = { git = "https://github.com/Morindhal/mmo_parser_backend" }
+chrono = "*"
 libc = "*"
-clap = "2.19.1"
+clap = "*"
 clipboard = "*"
-ncurses = "5.83.0"
+ncurses = "*"
