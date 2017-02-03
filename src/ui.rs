@@ -98,6 +98,14 @@ pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &m
     wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tTAB to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
     wprintw(header_win, " Filters: ");
     wprintw(header_win, &ui_data.filters);
+    
+    wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+    wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+    wborder(encounter_list_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+
+    wrefresh(display_win);
+    wrefresh(header_win);
+    wrefresh(encounter_list_win);
 
     delwin(display_win);
     delwin(header_win);

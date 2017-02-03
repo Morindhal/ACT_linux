@@ -42,8 +42,6 @@ fn main()
         .version("0.1.0")
         .author("Bergman. <Morindhal@gmail.com>")
         .about("Parses MMO logs")
-            .arg(Arg::with_name("GAME"))
-                .help("Sets the game to parse, EQ2 is default")
             .arg(Arg::with_name("FILE")
                 .help("Sets the log-file to use")
                 .required(true)
@@ -51,6 +49,8 @@ fn main()
             .arg(Arg::with_name("player")
                 .required(true)
                 .help("Sets the character name to parse, this only catches the YOU and YOUR lines"))
+            .arg(Arg::with_name("GAME"))
+                .help("Sets the game to parse, EQ2 is default")
         .get_matches();
     /*Set log-file and player whos view the combat is parsed from based on CL input, player should be replaced with a name collected from the file-string*/
     let from_file = matches.value_of("FILE").unwrap();
@@ -116,18 +116,22 @@ fn main()
     let mut jsonobject:json::JsonValue = object!{"initial" => true};
     send_data_request.send(Box::new(object!{"initial" => true}));
     jsonobject = *(recieve_answer.recv().unwrap());
+    
 
-    let ui = thread::spawn(move ||
+    let mut ctx = ClipboardContext::new().unwrap();
+    let timeout = time::Duration::from_millis(1);
+    let mut ui_data = ui::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
+    let mut update_ui = true;
+    
+    let mut update_tick = time::Instant::now();
+    
+    'ui: loop
     {
-        let mut ctx = ClipboardContext::new().unwrap();
-        let timeout = time::Duration::from_millis(1);
-        let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
-        let mut update_ui = true;
-        
-        'ui: loop
+        if update_tick.elapsed() >= time::Duration::from_millis(1000)
         {
+            update_tick = time::Instant::now();
             send_data_request.send(Box::new(ui_data.jsonify()));
-            match recieve_answer.recv_timeout(timeout)
+            match recieve_answer.recv()
             {
                 Ok(val) =>
                 {
@@ -135,229 +139,230 @@ fn main()
                 },
                 Err(e) => {}
             }
-            if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
+        }
+        if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
+        {
+            if jsonobject["attacks"].len() != 0 && !ui_data.is_locked()
             {
-                if jsonobject["attacks"].len() != 0 && !ui_data.is_locked()
-                {
-                    ui_data.nav_xy[0].0 = jsonobject["encounters"].len() as i32 - 1;
-                    ui_data.nav_encounter_win_scroll.1 = 0;
-                }
+                ui_data.nav_xy[0].0 = jsonobject["encounters"].len() as i32 - 1;
+                ui_data.nav_encounter_win_scroll.1 = 0;
             }
-            match input_recieve.recv_timeout(timeout)
-            {
-                Ok(val) => match val
+        }
+        match input_recieve.recv_timeout(timeout)
+        {
+            Ok(val) => match val
+                {
+                    27 => // escape
                     {
-                        27 => // escape
+                        endwin();
+                        std::process::exit(1);
+                    },
+                    99 | 67 =>  // C | c
+                    {
+                        if !ui_data.is_locked()
                         {
-                            endwin();
-                            std::process::exit(1);
-                        },
-                        99 | 67 =>  // C | c
+                            match ctx.set_contents(format!("{}", jsonobject["encounters"][ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
+                            {
+                                Ok(_)=>
+                                {
+                                    /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
+                                    speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                },
+                                Err(e)=>{println!("Clipboard error: {}", e);}
+                            };
+                        }
+                        else
+                        {
+                            ui_data.filters.push( val as u8 as char );
+                            update_ui = true;
+                        }
+                    },
+                    KEY_UP => 
+                    {
+                        if ui_data.nav_xy.last().unwrap().0 > 0
                         {
                             if !ui_data.is_locked()
                             {
-                                match ctx.set_contents(format!("{}", jsonobject["encounters"][ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
+                                if  ui_data.nav_encounter_win_scroll.0 - 2 < jsonobject["encounters"].len() as i32
                                 {
-                                    Ok(_)=>
+                                    if ui_data.nav_encounter_win_scroll.1 < jsonobject["encounters"].len() as i32 - ui_data.nav_encounter_win_scroll.0 - 2
                                     {
-                                        /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
-                                        speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                                    },
-                                    Err(e)=>{println!("Clipboard error: {}", e);}
-                                };
-                            }
-                            else
-                            {
-                                ui_data.filters.push( val as u8 as char );
-                                update_ui = true;
-                            }
-                        },
-                        KEY_UP => 
-                        {
-                            if ui_data.nav_xy.last().unwrap().0 > 0
-                            {
-                                if !ui_data.is_locked()
-                                {
-                                    if  ui_data.nav_encounter_win_scroll.0 - 2 < jsonobject["encounters"].len() as i32
-                                    {
-                                        if ui_data.nav_encounter_win_scroll.1 < jsonobject["encounters"].len() as i32 - ui_data.nav_encounter_win_scroll.0 - 2
-                                        {
-                                            ui_data.nav_encounter_win_scroll.1 += 1;
-                                        }
-                                        else
-                                        {
-                                            ui_data.nav_xy.last_mut().unwrap().0 -= 1;
-                                        }
+                                        ui_data.nav_encounter_win_scroll.1 += 1;
                                     }
                                     else
                                     {
                                         ui_data.nav_xy.last_mut().unwrap().0 -= 1;
                                     }
                                 }
-                                else if ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
-                                        ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
-                                {
-                                    ui_data.nav_main_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                                }
                                 else
                                 {
                                     ui_data.nav_xy.last_mut().unwrap().0 -= 1;
                                 }
                             }
-                            update_ui = true;
-                        },
-                        KEY_DOWN => 
+                            else if ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
+                                    ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
+                            {
+                                ui_data.nav_main_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                            }
+                            else
+                            {
+                                ui_data.nav_xy.last_mut().unwrap().0 -= 1;
+                            }
+                        }
+                        update_ui = true;
+                    },
+                    KEY_DOWN => 
+                    {
+                        if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < jsonobject["combatants"].len() as i32 - 1
                         {
-                            if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < jsonobject["combatants"].len() as i32 - 1
+                            ui_data.nav_xy.last_mut().unwrap().0 += 1;
+                        }
+                        else if ui_data.nav_lock_combatant
+                        {
+                            ui_data.nav_xy.last_mut().unwrap().0 += 1;
+                        }
+                        else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < jsonobject["encounters"].len() as i32 - 1
+                        {
+                            if ui_data.nav_encounter_win_scroll.1 > 0
+                            {
+                                ui_data.nav_encounter_win_scroll.1 -= 1;
+                            }
+                            else
                             {
                                 ui_data.nav_xy.last_mut().unwrap().0 += 1;
                             }
-                            else if ui_data.nav_lock_combatant
-                            {
-                                ui_data.nav_xy.last_mut().unwrap().0 += 1;
-                            }
-                            else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < jsonobject["encounters"].len() as i32 - 1
-                            {
-                                if ui_data.nav_encounter_win_scroll.1 > 0
-                                {
-                                    ui_data.nav_encounter_win_scroll.1 -= 1;
-                                }
-                                else
-                                {
-                                    ui_data.nav_xy.last_mut().unwrap().0 += 1;
-                                }
-                            }
-                            update_ui = true;
-                        },/*
-                        KEY_LEFT => 
+                        }
+                        update_ui = true;
+                    },/*
+                    KEY_LEFT => 
+                    {
+                        if !ui_data.nav_lock_filter
                         {
-                            if !ui_data.nav_lock_filter
+                            if ui_data.nav_xy.last().unwrap().1 == 1 && ui_data.nav_lock_encounter && !ui_data.nav_lock_combatant
                             {
-                                if ui_data.nav_xy.last().unwrap().1 == 1 && ui_data.nav_lock_encounter && !ui_data.nav_lock_combatant
-                                {
-                                    ui_data.nav_xy.last().unwrap().1 = 0;
-                                    update_ui = true;
-                                }
-                            }
-                        },
-                        KEY_RIGHT => 
-                        {
-                            if !ui_data.nav_lock_filter
-                            {
-                                if ui_data.nav_lock_encounter && ui_data.nav_xy.last().unwrap().0 < encounters.len() as i32
-                                {
-                                    ui_data.deeper();
-                                    ui_data.unlock();
-                                    ui_data.nav_lock_combatant = true;
-                                     update_ui = true;
-                                }
-                            }
-                        },*/
-                        10 => // enter
-                        {
-                            if ui_data.nav_lock_filter
-                            {
-                                ui_data.surface();
-                                ui_data.nav_lock_filter = false;
-                            }
-                            else if ui_data.nav_lock_encounter
-                            {
-                                ui_data.deeper();
-                                ui_data.nav_lock_encounter = false;
-                                ui_data.nav_lock_combatant = true;
-                            }
-                            else if !ui_data.is_locked()
-                            {
-                                if ui_data.nav_xy.last().unwrap().0 == jsonobject["encounters"].len() as i32
-                                {
-                                    ui_data.nav_xy.last_mut().unwrap().0 -= 1; // ugly code, will bug around --- needs fix
-                                }
-                                ui_data.deeper();
-                                ui_data.nav_lock_encounter = true;
-                            }
-                            update_ui = true;
-                        },
-                        KEY_BACKSPACE =>
-                        {
-                            if !ui_data.nav_lock_filter
-                            {
-                                if ui_data.nav_lock_encounter
-                                {
-                                    ui_data.surface();
-                                    ui_data.nav_lock_encounter = false;
-                                }
-                                else if ui_data.nav_lock_combatant
-                                {
-                                    ui_data.surface();
-                                    ui_data.nav_lock_encounter = true;
-                                    ui_data.nav_lock_combatant = false;
-                                }
-                                else  //backspace with ui_data.nav_xy having a len() of 1
-                                {
-                                }
-                            }
-                            else
-                            {
-                                ui_data.filters.pop();
-                            }
-                            update_ui = true;
-                        },
-                        43 => // + key
-                        {
-                            if !ui_data.nav_lock_filter
-                            {
-                                ui_data.deeper();
-                                ui_data.nav_lock_filter = true;
-                                update_ui = true;
-                            }
-                            else
-                            {
-                                ui_data.filters.push( val as u8 as char );
-                                update_ui = true;
-                            }
-                        },
-                        9 => // TAB key
-                        {
-                            if ui_data.nav_lock_refresh
-                            {
-                                ui_data.nav_lock_refresh = false;
-                            }
-                            else
-                            {
-                                ui_data.nav_lock_refresh = true;
-                            }
-                            update_ui = true;
-                        },
-                        _ => 
-                        {
-                            //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);
-                            if ui_data.nav_lock_filter
-                            {
-                                ui_data.filters.push( val as u8 as char );
+                                ui_data.nav_xy.last().unwrap().1 = 0;
                                 update_ui = true;
                             }
                         }
-                        //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
                     },
-                Err(e) => {}
-            }
-            /*
-            * parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend
-            * parse the response and update the display.
-            * 
-            * do this procedure ONLY if a request for new data has been sent.
-            * 
-            * poll for update every X secs.
-            * OR
-            * listen to updates from the parser.
-            */
-            if update_ui && !jsonobject["encounters"].is_empty()
-            {
-                structs::ui_draw(&format!(""), &player_display, &jsonobject, &mut ui_data);
-                update_ui = false;
-            }
+                    KEY_RIGHT => 
+                    {
+                        if !ui_data.nav_lock_filter
+                        {
+                            if ui_data.nav_lock_encounter && ui_data.nav_xy.last().unwrap().0 < encounters.len() as i32
+                            {
+                                ui_data.deeper();
+                                ui_data.unlock();
+                                ui_data.nav_lock_combatant = true;
+                                    update_ui = true;
+                            }
+                        }
+                    },*/
+                    10 => // enter
+                    {
+                        if ui_data.nav_lock_filter
+                        {
+                            ui_data.surface();
+                            ui_data.nav_lock_filter = false;
+                        }
+                        else if ui_data.nav_lock_encounter
+                        {
+                            ui_data.deeper();
+                            ui_data.nav_lock_encounter = false;
+                            ui_data.nav_lock_combatant = true;
+                        }
+                        else if !ui_data.is_locked()
+                        {
+                            if ui_data.nav_xy.last().unwrap().0 == jsonobject["encounters"].len() as i32
+                            {
+                                ui_data.nav_xy.last_mut().unwrap().0 -= 1; // ugly code, will bug around --- needs fix
+                            }
+                            ui_data.deeper();
+                            ui_data.nav_lock_encounter = true;
+                        }
+                        update_ui = true;
+                    },
+                    KEY_BACKSPACE =>
+                    {
+                        if !ui_data.nav_lock_filter
+                        {
+                            if ui_data.nav_lock_encounter
+                            {
+                                ui_data.surface();
+                                ui_data.nav_lock_encounter = false;
+                            }
+                            else if ui_data.nav_lock_combatant
+                            {
+                                ui_data.surface();
+                                ui_data.nav_lock_encounter = true;
+                                ui_data.nav_lock_combatant = false;
+                            }
+                            else  //backspace with ui_data.nav_xy having a len() of 1
+                            {
+                            }
+                        }
+                        else
+                        {
+                            ui_data.filters.pop();
+                        }
+                        update_ui = true;
+                    },
+                    43 => // + key
+                    {
+                        if !ui_data.nav_lock_filter
+                        {
+                            ui_data.deeper();
+                            ui_data.nav_lock_filter = true;
+                            update_ui = true;
+                        }
+                        else
+                        {
+                            ui_data.filters.push( val as u8 as char );
+                            update_ui = true;
+                        }
+                    },
+                    9 => // TAB key
+                    {
+                        if ui_data.nav_lock_refresh
+                        {
+                            ui_data.nav_lock_refresh = false;
+                        }
+                        else
+                        {
+                            ui_data.nav_lock_refresh = true;
+                        }
+                        update_ui = true;
+                    },
+                    _ => 
+                    {
+                        //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);
+                        if ui_data.nav_lock_filter
+                        {
+                            ui_data.filters.push( val as u8 as char );
+                            update_ui = true;
+                        }
+                    }
+                    //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
+                },
+            Err(e) => {}
         }
-    });
+        /*
+        * parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend
+        * parse the response and update the display.
+        * 
+        * do this procedure ONLY if a request for new data has been sent.
+        * 
+        * poll for update every X secs.
+        * OR
+        * listen to updates from the parser.
+        */
+        if update_ui
+        {
+            ui::ui_draw(&format!(""), &player_display, &jsonobject, &mut ui_data);
+            update_ui = false;
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
 
 }
 
@@ -377,7 +382,7 @@ send a request-JSON-object to the parser, this contains a wish-list of what I wa
     The response is then forwarded to the update_ui function and drawn.
         This has the benefit of being doable even if the response doesn't exactly match expectations.
     This request changes depending on user input.
-        Limit how many resonses that are wanted by low+count.
+        Limit how many resonses that are wanted by low+count?
 
 
 */

@@ -139,7 +139,7 @@ dependencies = [
 [[package]]
 name = "mmo_parser_backend"
 version = "0.1.0"
-source = "git+https://github.com/Morindhal/mmo_parser_backend#9426cbd364e3f3f12c793d43ca3d620c9db3b308"
+source = "git+https://github.com/Morindhal/mmo_parser_backend#ba85c5f39b12b20c8e44e875f64171a42aeba4dc"
 dependencies = [
  "chrono 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "json 0.11.5 (registry+https://github.com/rust-lang/crates.io-index)",
