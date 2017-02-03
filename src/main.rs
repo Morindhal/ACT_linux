@@ -23,7 +23,7 @@ use std::fmt;
 use std::{thread, time};
 
 
-mod structs;
+mod ui;
 
 use mmo_parser_backend::eventloop::EventLoop;
 
