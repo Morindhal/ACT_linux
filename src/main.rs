@@ -3,6 +3,8 @@ extern crate clap;
 extern crate clipboard;
 extern crate ncurses;
 extern crate mmo_parser_backend;
+#[macro_use]
+extern crate json;
 
 use std::sync::mpsc::{self, RecvTimeoutError};
 
@@ -26,8 +28,6 @@ mod structs;
 use mmo_parser_backend::eventloop::EventLoop;
 
 
-static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
-
 fn speak(data: &CStr) {
     extern { fn system(data: *const c_char); }
 
@@ -42,9 +42,8 @@ fn main()
         .version("0.1.0")
         .author("Bergman. <Morindhal@gmail.com>")
         .about("Parses MMO logs")
-            ,arg(Argh::with_name("GAME"))
+            .arg(Arg::with_name("GAME"))
                 .help("Sets the game to parse, EQ2 is default")
-                .required(false)
             .arg(Arg::with_name("FILE")
                 .help("Sets the log-file to use")
                 .required(true)
@@ -59,7 +58,7 @@ fn main()
     let player_display = String::from(player);
 
 
-    let (send_data_request, recieve_answer) = EventLoop::spawn_parser(String::from(from_file), String::from(player));
+    let (send_data_request, recieve_answer) = EventLoop::new(String::from(from_file), String::from(player));
 
     /*start the n-curses UI*/
     initscr();
@@ -69,7 +68,7 @@ fn main()
     init_pair(1, COLOR_RED, COLOR_BLACK);
 
 
-    let (input_recieve, input_send) = mpsc::channel();
+    let (input_send, input_recieve) = mpsc::channel();
     //let (timer_tx, timer_rx) = mpsc::channel();
 
     
@@ -110,6 +109,13 @@ fn main()
         }
     });*/
 
+    /*
+    * Send request for data
+    * recieve data, wait for data until data is sent.
+    */
+    let mut jsonobject:json::JsonValue = object!{"initial" => true};
+    send_data_request.send(Box::new(object!{"initial" => true}));
+    jsonobject = *(recieve_answer.recv().unwrap());
 
     let ui = thread::spawn(move ||
     {
@@ -117,13 +123,23 @@ fn main()
         let timeout = time::Duration::from_millis(1);
         let mut ui_data = structs::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
         let mut update_ui = true;
+        
         'ui: loop
         {
+            send_data_request.send(Box::new(ui_data.jsonify()));
+            match recieve_answer.recv_timeout(timeout)
+            {
+                Ok(val) =>
+                {
+                    jsonobject = *val;
+                },
+                Err(e) => {}
+            }
             if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
             {
-                if encounters.last().unwrap().attacks.len() != 0 && !ui_data.is_locked()
+                if jsonobject["attacks"].len() != 0 && !ui_data.is_locked()
                 {
-                    ui_data.nav_xy[0].0 = encounters.len() as i32 - 1;
+                    ui_data.nav_xy[0].0 = jsonobject["encounters"].len() as i32 - 1;
                     ui_data.nav_encounter_win_scroll.1 = 0;
                 }
             }
@@ -140,7 +156,7 @@ fn main()
                         {
                             if !ui_data.is_locked()
                             {
-                                match ctx.set_contents(format!("{}", encounters[ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
+                                match ctx.set_contents(format!("{}", jsonobject["encounters"][ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
                                 {
                                     Ok(_)=>
                                     {
@@ -162,9 +178,9 @@ fn main()
                             {
                                 if !ui_data.is_locked()
                                 {
-                                    if  ui_data.nav_encounter_win_scroll.0 - 2 < encounters.len() as i32
+                                    if  ui_data.nav_encounter_win_scroll.0 - 2 < jsonobject["encounters"].len() as i32
                                     {
-                                        if ui_data.nav_encounter_win_scroll.1 < encounters.len() as i32 - ui_data.nav_encounter_win_scroll.0 - 2
+                                        if ui_data.nav_encounter_win_scroll.1 < jsonobject["encounters"].len() as i32 - ui_data.nav_encounter_win_scroll.0 - 2
                                         {
                                             ui_data.nav_encounter_win_scroll.1 += 1;
                                         }
@@ -178,8 +194,8 @@ fn main()
                                         ui_data.nav_xy.last_mut().unwrap().0 -= 1;
                                     }
                                 }
-                                else if ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].combatants.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
-                                        ui_data.nav_lock_encounter && encounters[ui_data.nav_xy[0].0 as usize].combatants.len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
+                                else if ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
+                                        ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
                                 {
                                     ui_data.nav_main_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
                                 }
@@ -192,7 +208,7 @@ fn main()
                         },
                         KEY_DOWN => 
                         {
-                            if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < encounters[ui_data.nav_xy[0].0 as usize].combatants.len() as i32 - 1
+                            if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < jsonobject["combatants"].len() as i32 - 1
                             {
                                 ui_data.nav_xy.last_mut().unwrap().0 += 1;
                             }
@@ -200,7 +216,7 @@ fn main()
                             {
                                 ui_data.nav_xy.last_mut().unwrap().0 += 1;
                             }
-                            else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < encounters.len() as i32 - 1
+                            else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < jsonobject["encounters"].len() as i32 - 1
                             {
                                 if ui_data.nav_encounter_win_scroll.1 > 0
                                 {
@@ -233,7 +249,7 @@ fn main()
                                     ui_data.deeper();
                                     ui_data.unlock();
                                     ui_data.nav_lock_combatant = true;
-                                    update_ui = true;
+                                     update_ui = true;
                                 }
                             }
                         },*/
@@ -252,7 +268,7 @@ fn main()
                             }
                             else if !ui_data.is_locked()
                             {
-                                if ui_data.nav_xy.last().unwrap().0 == encounters.len() as i32
+                                if ui_data.nav_xy.last().unwrap().0 == jsonobject["encounters"].len() as i32
                                 {
                                     ui_data.nav_xy.last_mut().unwrap().0 -= 1; // ugly code, will bug around --- needs fix
                                 }
@@ -326,18 +342,18 @@ fn main()
                 Err(e) => {}
             }
             /*
-            /*parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend
-            /*parse the response and update the display.
-            /*
-            /*do this procedure ONLY if a request for new data has been sent.
-            /*
-            /*poll for update every X secs.
-            /*OR
-            /*listen to updates from the parser.
+            * parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend
+            * parse the response and update the display.
+            * 
+            * do this procedure ONLY if a request for new data has been sent.
+            * 
+            * poll for update every X secs.
+            * OR
+            * listen to updates from the parser.
             */
-            if update_ui && !encounters.is_empty()
+            if update_ui && !jsonobject["encounters"].is_empty()
             {
-                ui_update(&format!(""), &player_display, &mut ui_data, &mut encounters);
+                structs::ui_draw(&format!(""), &player_display, &jsonobject, &mut ui_data);
                 update_ui = false;
             }
         }

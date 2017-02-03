@@ -1,3 +1,10 @@
+
+use ncurses::*;
+use json::JsonValue;
+
+
+static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
+
 pub struct ui_data
 {
     pub nav_xy: Vec<(i32, i32)>,
@@ -36,15 +43,15 @@ impl ui_data
         self.nav_xy.pop();
     }
     
-    pub fn jsonify()
-        -> json::JsonValue
+    pub fn jsonify(&self)
+        -> JsonValue
     {
         if !self.is_locked()
         {
             object!
             {
                 "encounter_list" => true,
-                "encounter_specific" => 0,
+                "encounter_specific" => 0
             }
         }
         else if self.nav_lock_combatant
@@ -67,7 +74,37 @@ impl ui_data
     }
 }
 
+pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &mut ui_data)
+{
+    let mut max_x = 0;
+    let mut max_y = 0;
+    getmaxyx(stdscr(), &mut max_y, &mut max_x);
 
+    ui_data.nav_main_win_scroll.0 = max_y - 22;
+    ui_data.nav_encounter_win_scroll.0 = max_y - 22;
+
+    
+
+    let mut display_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
+    let mut header_win = newwin(20, max_x, 0, 0);
+    let mut encounter_list_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
+
+    wclear(display_win);
+    wclear(header_win);
+    wclear(encounter_list_win);
+    
+    
+    wmove(header_win, 1, 1);
+    wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tTAB to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
+    wprintw(header_win, " Filters: ");
+    wprintw(header_win, &ui_data.filters);
+
+    delwin(display_win);
+    delwin(header_win);
+    delwin(encounter_list_win);
+}
+
+/*
 fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encounters: &mut Vec<structs::CombatantList>)
 {
     let mut max_x = 0;
@@ -224,4 +261,4 @@ fn ui_update( body: &str, highlight: &str, ui_data: &mut structs::ui_data, encou
     delwin(header_win);
     delwin(encounter_win);
 }
-
+*/
