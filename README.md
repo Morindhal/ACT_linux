@@ -1,4 +1,4 @@
-# ACT_linux
+# mmo_parser_cli
 
 Depends on <a href="https://github.com/Morindhal/mmo_parser_backend">mmo_parser_backend</a> where the actual parsing is being done.
 
