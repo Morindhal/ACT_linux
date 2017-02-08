@@ -120,7 +120,7 @@ fn main()
 
     let mut ctx = ClipboardContext::new().unwrap();
     let timeout = time::Duration::from_millis(1);
-    let mut ui_data = ui::ui_data{nav_xy: vec![(0,0)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
+    let mut ui_data = ui::ui_data{nav_xy: vec![(0,0,ui::primary_view::encounter_list)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
     let mut update_ui = true;
     
     let mut update_tick = time::Instant::now();
@@ -179,36 +179,7 @@ fn main()
                     },
                     KEY_UP => 
                     {
-                        if ui_data.nav_xy.last().unwrap().0 > 0
-                        {
-                            if !ui_data.is_locked()
-                            {
-                                if  ui_data.nav_encounter_win_scroll.0 - 2 < jsonobject["encounters"].len() as i32
-                                {
-                                    if ui_data.nav_encounter_win_scroll.1 < jsonobject["encounters"].len() as i32 - ui_data.nav_encounter_win_scroll.0 - 2
-                                    {
-                                        ui_data.nav_encounter_win_scroll.1 += 1;
-                                    }
-                                    else
-                                    {
-                                        ui_data.nav_xy.last_mut().unwrap().0 -= 1;
-                                    }
-                                }
-                                else
-                                {
-                                    ui_data.nav_xy.last_mut().unwrap().0 -= 1;
-                                }
-                            }
-                            else if ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0 ||
-                                    ui_data.nav_lock_encounter && jsonobject["combatants"].len() as i32 - ui_data.nav_main_win_scroll.0 - ui_data.nav_main_win_scroll.1 < 0
-                            {
-                                ui_data.nav_main_win_scroll.1 += 1;speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                            }
-                            else
-                            {
-                                ui_data.nav_xy.last_mut().unwrap().0 -= 1;
-                            }
-                        }
+                        ui_data.up();
                         update_ui = true;
                     },
                     KEY_DOWN => 

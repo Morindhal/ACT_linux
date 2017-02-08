@@ -5,9 +5,17 @@ use json::JsonValue;
 
 static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
 
+pub enum primary_view
+{
+    encounter_list,
+    combatant_list,
+    combatant_inspect,
+    ability_track(i32)
+}
+
 pub struct ui_data
 {
-    pub nav_xy: Vec<(i32, i32)>,
+    pub nav_xy: Vec<(i32, i32, primary_view)>,
     pub nav_lock_encounter: bool,
     pub nav_lock_combatant: bool,
     pub nav_lock_filter: bool,
@@ -35,12 +43,28 @@ impl ui_data
     
     pub fn deeper(&mut self)
     {
-        self.nav_xy.push((0,0));
+        match self.nav_xy.last().unwrap().2
+        {
+            primary_view::encounter_list => self.nav_xy.push((0,0,primary_view::combatant_list)),
+            primary_view::combatant_list => self.nav_xy.push((0,0,primary_view::combatant_inspect)),
+            primary_view::combatant_inspect => self.nav_xy.push((0,0,primary_view::ability_track(0))),
+            _ => {}
+        }
     }
     
     pub fn surface(&mut self)
     {
         self.nav_xy.pop();
+    }
+    
+    pub fn up(&mut self)
+    {
+        self.nav_xy.last_mut().unwrap().1 +=1;
+    }
+    
+    pub fn down(&mut self)
+    {
+        self.nav_xy.last_mut().unwrap().1 =-1;
     }
     
     pub fn jsonify(&self)
@@ -98,6 +122,13 @@ pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &m
     wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tTAB to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
     wprintw(header_win, " Filters: ");
     wprintw(header_win, &ui_data.filters);
+
+    for encounter in draw_object["EncounterList"].array()
+    {
+        wprintw(encounter_list_win, &*format!(" {}\n Duration: {}", encounter["Name"], encounter["EndTime"]-encounter["StartTime"]);
+        //Parse the times back into a chrono to calculate the duration of the fight
+        //Fix the for-loop to get the array, whichever function json wants
+    }
     
     wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
