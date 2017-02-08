@@ -136,6 +136,7 @@ fn main()
                 Ok(val) =>
                 {
                     jsonobject = *val;
+                    update_ui = true;
                 },
                 Err(e) => {}
             }
@@ -328,7 +329,7 @@ fn main()
         * listen to updates from the parser.
         */
         if update_ui
-        {
+        {jsonobject.push(object!{"blubb" => "W00T"});
             ui::ui_draw(&format!(""), &player_display, &jsonobject, &mut ui_data);
             update_ui = false;
         }

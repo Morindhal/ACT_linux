@@ -74,16 +74,16 @@ impl ui_data
         {
             object!
             {
-                "encounter_list" => true,
-                "encounter_specific" => 0
+                "EncounterList" => true,
+                "EncounterSpecific" => 0
             }
         }
         else if self.nav_lock_combatant
         {
             object!
             {
-                "encounter_list" => true,
-                "encounter_specific" => 0,
+                "EncounterList" => true,
+                "EncounterSpecific" => 0,
                 "combatant_specific" => 0 //placeholder i32's, should be usize of the currently selected encounter/combatant
             }
         }
@@ -92,7 +92,7 @@ impl ui_data
         {
             object!
             {
-                "default" => true // if default, send EVERYTHING.
+                "EncounterList" => true // if default, send EVERYTHING.
             }
         }
     }
@@ -122,14 +122,21 @@ pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &m
     wprintw(header_win, " Welcome to ACT_linux!\n\n\n\tESC to exit.\n\tc to copy the last completed fight to the clipboard.\n\tC to copy the current fight to the clipboard.\n\tTAB to toggle a lock of the encounter-view to what is selected (X) or move to the newest encounter at each update.\n\t+ to begin editing the filters used to only  show certain attacks when inspecting a player.\n\n");
     wprintw(header_win, " Filters: ");
     wprintw(header_win, &ui_data.filters);
+    
+    wmove(display_win, 1, 1);
+    wattron(display_win, A_BOLD());
+    wprintw(display_win, "\tEncounters:\n\n");
+    wattroff(display_win, A_BOLD());
 
-    for encounter in draw_object["EncounterList"].array()
+    for encounter in draw_object["EncounterList"].members()
     {
-        wprintw(encounter_list_win, &*format!(" {}\n Duration: {}", encounter["Name"], encounter["EndTime"]-encounter["StartTime"]);
+        wprintw(encounter_list_win, &*format!(" {}\n Duration: {}", encounter["Name"], encounter["Duration"]));
         //Parse the times back into a chrono to calculate the duration of the fight
         //Fix the for-loop to get the array, whichever function json wants
     }
-    
+    wprintw(display_win, "   ");
+    wprintw(display_win, draw_object.dump().as_str());
+
     wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(encounter_list_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
