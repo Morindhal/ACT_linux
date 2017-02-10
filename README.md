@@ -1,5 +1,7 @@
 # mmo_parser_cli
 
+CURRENTLY IN A BROKEN STATE
+
 Depends on <a href="https://github.com/Morindhal/mmo_parser_backend">mmo_parser_backend</a> where the actual parsing is being done.
 
 Depends on having espeak installed for TTS functionality, however should be able to parse without it.
@@ -23,3 +25,11 @@ Left to do:
 
 This is very much a work in progress.
 
+
+
+TODO:
+Add logging through the env_logger crate. (errors and such)
+Test the newest changes on a real log-file.
+Filter out all the small warnings, mostly there due to the naming-convention.
+
+Add a stable version number when everything is back into a working state. (1.0.0 when heal parsing has been added)

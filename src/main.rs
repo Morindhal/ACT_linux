@@ -127,7 +127,7 @@ fn main()
     
     'ui: loop
     {
-        if update_tick.elapsed() >= time::Duration::from_millis(1000)
+        if update_tick.elapsed() >= time::Duration::from_millis(2000)
         {
             update_tick = time::Instant::now();
             send_data_request.send(Box::new(ui_data.jsonify()));
@@ -137,16 +137,13 @@ fn main()
                 {
                     jsonobject = *val;
                     update_ui = true;
+                    if ui_data.nav_xy.last().unwrap().2 == ui::primary_view::encounter_list && !ui_data.nav_lock_refresh
+                    {
+                        ui_data.nav_xy[0].0 = jsonobject["EncounterList"].len() as i32 - 1;
+                        ui_data.nav_encounter_win_scroll.1 = 0;
+                    }
                 },
                 Err(e) => {}
-            }
-        }
-        if !ui_data.nav_lock_encounter && ui_data.nav_lock_refresh
-        {
-            if jsonobject["attacks"].len() != 0 && !ui_data.is_locked()
-            {
-                ui_data.nav_xy[0].0 = jsonobject["encounters"].len() as i32 - 1;
-                ui_data.nav_encounter_win_scroll.1 = 0;
             }
         }
         match input_recieve.recv_timeout(timeout)
@@ -329,7 +326,7 @@ fn main()
         * listen to updates from the parser.
         */
         if update_ui
-        {jsonobject.push(object!{"blubb" => "W00T"});
+        {
             ui::ui_draw(&format!(""), &player_display, &jsonobject, &mut ui_data);
             update_ui = false;
         }

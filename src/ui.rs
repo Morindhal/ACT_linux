@@ -5,6 +5,7 @@ use json::JsonValue;
 
 static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
 
+#[derive(PartialEq, Eq)]
 pub enum primary_view
 {
     encounter_list,
@@ -59,12 +60,12 @@ impl ui_data
     
     pub fn up(&mut self)
     {
-        self.nav_xy.last_mut().unwrap().1 +=1;
+        self.nav_xy.last_mut().unwrap().0 +=1;
     }
     
     pub fn down(&mut self)
     {
-        self.nav_xy.last_mut().unwrap().1 =-1;
+        self.nav_xy.last_mut().unwrap().0 =-1;
     }
     
     pub fn jsonify(&self)
@@ -75,7 +76,7 @@ impl ui_data
             object!
             {
                 "EncounterList" => true,
-                "EncounterSpecific" => 0
+                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, primary_view::encounter_list)).0
             }
         }
         else if self.nav_lock_combatant
@@ -83,8 +84,8 @@ impl ui_data
             object!
             {
                 "EncounterList" => true,
-                "EncounterSpecific" => 0,
-                "combatant_specific" => 0 //placeholder i32's, should be usize of the currently selected encounter/combatant
+                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, primary_view::encounter_list)).0,
+                "CombatantSpecific" => 0 //placeholder i32's, should be usize of the currently selected encounter/combatant
             }
         }
         //else if whatever view --> make json
@@ -123,19 +124,29 @@ pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &m
     wprintw(header_win, " Filters: ");
     wprintw(header_win, &ui_data.filters);
     
-    wmove(display_win, 1, 1);
-    wattron(display_win, A_BOLD());
-    wprintw(display_win, "\tEncounters:\n\n");
-    wattroff(display_win, A_BOLD());
+
+    if draw_object["EncounterSpecific"] != "null"
+    {
+        wmove(display_win, 1, 1);
+        wattron(display_win, A_BOLD());
+        wprintw(display_win, "\tEncounters:\n\n");
+        wattroff(display_win, A_BOLD());
+        //wprintw(display_win, draw_object.dump().as_str());
+        
+        for combatant in draw_object["EncounterSpecific"].members()
+        {
+            let duration = draw_object["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap();
+            let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap() / duration)/1000000.0  };
+            wprintw(display_win, &*format!("{name}: {dps:.3}m ", name=combatant["Name"], dps=dps));
+        }
+    }
 
     for encounter in draw_object["EncounterList"].members()
     {
-        wprintw(encounter_list_win, &*format!(" {}\n Duration: {}", encounter["Name"], encounter["Duration"]));
-        //Parse the times back into a chrono to calculate the duration of the fight
-        //Fix the for-loop to get the array, whichever function json wants
+        wmove(encounter_list_win, 1, 1);
+        wprintw(encounter_list_win, &*format!(" {}", encounter["Name"]));
     }
-    wprintw(display_win, "   ");
-    wprintw(display_win, draw_object.dump().as_str());
+    
 
     wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
