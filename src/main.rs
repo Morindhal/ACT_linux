@@ -8,7 +8,6 @@ extern crate json;
 
 use std::sync::mpsc::{self, RecvTimeoutError};
 
-use libc::system;
 use std::ffi::{CString, CStr};
 use std::os::raw::c_char;
 
@@ -18,14 +17,12 @@ use clipboard::ClipboardContext;
 
 use ncurses::*;
 
-use std::fmt;
-
 use std::{thread, time};
 
 
 mod ui;
 
-use mmo_parser_backend::eventloop::EventLoop;
+use mmo_parser_backend::eventloop::event_loop;
 
 
 fn speak(data: &CStr) {
@@ -58,7 +55,7 @@ fn main()
     let player_display = String::from(player);
 
 
-    let (send_data_request, recieve_answer) = EventLoop::new(String::from(from_file), String::from(player));
+    let (send_data_request, recieve_answer) = event_loop::new(String::from(from_file), String::from(player));
 
     /*start the n-curses UI*/
     initscr();
@@ -120,7 +117,7 @@ fn main()
 
     let mut ctx = ClipboardContext::new().unwrap();
     let timeout = time::Duration::from_millis(1);
-    let mut ui_data = ui::ui_data{nav_xy: vec![(0,0,ui::PrimaryView::encounter_list)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
+    let mut ui_data = ui::UiData{nav_xy: vec![(0,0,ui::PrimaryView::EncounterList)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
     let mut update_ui = true;
     
     let mut update_tick = time::Instant::now();
@@ -137,7 +134,7 @@ fn main()
                 {
                     jsonobject = *val;
                     update_ui = true;
-                    if ui_data.nav_xy.last().unwrap().2 == ui::PrimaryView::encounter_list && !ui_data.nav_lock_refresh
+                    if ui_data.nav_xy.last().unwrap().2 == ui::PrimaryView::EncounterList && !ui_data.nav_lock_refresh
                     {
                         ui_data.nav_xy[0].0 = jsonobject["EncounterList"].len() as i32 - 1;
                         ui_data.nav_encounter_win_scroll.1 = 0;

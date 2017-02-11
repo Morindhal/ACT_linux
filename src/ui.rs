@@ -8,15 +8,15 @@ static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
 #[derive(PartialEq, Eq)]
 pub enum PrimaryView
 {
-    encounter_list,
-    combatant_list,
-    combatant_inspect,
-    ability_track(i32)
+    EncounterList,
+    CombatantList,
+    CombatantInspect,
+    AbilityTrack(i32)
 }
 
 pub struct UiData
 {
-    pub nav_xy: Vec<(i32, i32, primary_view)>,
+    pub nav_xy: Vec<(i32, i32, PrimaryView)>,
     pub nav_lock_encounter: bool,
     pub nav_lock_combatant: bool,
     pub nav_lock_filter: bool,
@@ -27,7 +27,7 @@ pub struct UiData
     pub debug: bool
 }
 
-impl ui_data
+impl UiData
 {
     pub fn is_locked(&self) -> bool
     {
@@ -39,9 +39,9 @@ impl ui_data
     {
         match self.nav_xy.last().unwrap().2
         {
-            primary_view::encounter_list => self.nav_xy.push((0,0,primary_view::combatant_list)),
-            primary_view::combatant_list => self.nav_xy.push((0,0,primary_view::combatant_inspect)),
-            primary_view::combatant_inspect => self.nav_xy.push((0,0,primary_view::ability_track(0))),
+            PrimaryView::EncounterList => self.nav_xy.push((0,0,PrimaryView::CombatantList)),
+            PrimaryView::CombatantList => self.nav_xy.push((0,0,PrimaryView::CombatantInspect)),
+            PrimaryView::CombatantInspect => self.nav_xy.push((0,0,PrimaryView::AbilityTrack(0))),
             _ => {}
         }
     }
@@ -69,7 +69,7 @@ impl ui_data
             object!
             {
                 "EncounterList" => true,
-                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, primary_view::encounter_list)).0
+                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, PrimaryView::EncounterList)).0
             }
         }
         else if self.nav_lock_combatant
@@ -77,7 +77,7 @@ impl ui_data
             object!
             {
                 "EncounterList" => true,
-                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, primary_view::encounter_list)).0,
+                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, PrimaryView::EncounterList)).0,
                 "CombatantSpecific" => 0 //placeholder i32's, should be usize of the currently selected encounter/combatant
             }
         }
@@ -105,11 +105,11 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 
     let display_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
     let header_win = newwin(20, max_x, 0, 0);
-    let encounter_list_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
+    let EncounterList_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
 
     wclear(display_win);
     wclear(header_win);
-    wclear(encounter_list_win);
+    wclear(EncounterList_win);
     
     
     wmove(header_win, 1, 1);
@@ -136,22 +136,22 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 
     for encounter in draw_object["EncounterList"].members()
     {
-        wmove(encounter_list_win, 1, 1);
-        wprintw(encounter_list_win, &*format!(" {}", encounter["Name"]));
+        wmove(EncounterList_win, 1, 1);
+        wprintw(EncounterList_win, &*format!(" {}", encounter["Name"]));
     }
     
 
     wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
-    wborder(encounter_list_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+    wborder(EncounterList_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
 
     wrefresh(display_win);
     wrefresh(header_win);
-    wrefresh(encounter_list_win);
+    wrefresh(EncounterList_win);
 
     delwin(display_win);
     delwin(header_win);
-    delwin(encounter_list_win);
+    delwin(EncounterList_win);
 }
 
 /*

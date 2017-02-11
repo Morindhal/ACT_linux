@@ -31,5 +31,7 @@ TODO:
 Add logging through the env_logger crate. (errors and such)
 Test the newest changes on a real log-file.
 Filter out all the small warnings, mostly there due to the naming-convention.
+    This is now partly done, the changes need to be tested.
+Add error handling code instead of simply unwrapping everything, throw the exceptions into a log.
 
 Add a stable version number when everything is back into a working state. (1.0.0 when heal parsing has been added)
