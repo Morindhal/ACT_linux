@@ -6,7 +6,7 @@ use json::JsonValue;
 static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
 
 #[derive(PartialEq, Eq)]
-pub enum primary_view
+pub enum PrimaryView
 {
     encounter_list,
     combatant_list,
@@ -14,7 +14,7 @@ pub enum primary_view
     ability_track(i32)
 }
 
-pub struct ui_data
+pub struct UiData
 {
     pub nav_xy: Vec<(i32, i32, primary_view)>,
     pub nav_lock_encounter: bool,
@@ -33,13 +33,6 @@ impl ui_data
     {
         if self.nav_lock_combatant || self.nav_lock_encounter || self.nav_lock_filter {true}
         else {false}
-    }
-
-    pub fn unlock(&mut self)
-    {
-        self.nav_lock_combatant = false;
-        self.nav_lock_encounter = false;
-        self.nav_lock_filter = false;
     }
     
     pub fn deeper(&mut self)
@@ -99,7 +92,7 @@ impl ui_data
     }
 }
 
-pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &mut ui_data)
+pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 {
     let mut max_x = 0;
     let mut max_y = 0;
@@ -110,9 +103,9 @@ pub fn ui_draw(body: &str, highlight: &str, draw_object: &JsonValue, ui_data: &m
 
     
 
-    let mut display_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
-    let mut header_win = newwin(20, max_x, 0, 0);
-    let mut encounter_list_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
+    let display_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
+    let header_win = newwin(20, max_x, 0, 0);
+    let encounter_list_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
 
     wclear(display_win);
     wclear(header_win);
