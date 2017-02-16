@@ -5,8 +5,10 @@ extern crate ncurses;
 extern crate mmo_parser_backend;
 #[macro_use]
 extern crate json;
+#[macro_use]
+extern crate log;
 
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::mpsc::{self};
 
 use std::ffi::{CString, CStr};
 use std::os::raw::c_char;
@@ -50,8 +52,8 @@ fn main()
                 .help("Sets the game to parse, EQ2 is default")
         .get_matches();
     /*Set log-file and player whos view the combat is parsed from based on CL input, player should be replaced with a name collected from the file-string*/
-    let from_file = matches.value_of("FILE").unwrap();
-    let player = matches.value_of("player").unwrap();
+    let from_file = match matches.value_of("FILE") {Some(f) => f , None => {warn!("Unable to parse FILE into a variable."); panic!("Unable to parse FILE into a variable");}};
+    let player = match matches.value_of("player") {Some(p) => p , None => {warn!("Unable to parse FILE into a variable."); "NONAME"}};
     let player_display = String::from(player);
 
 
@@ -74,7 +76,7 @@ fn main()
     {
         'input: loop/*Listen to input, send input to main*/
         {
-            input_send.send(getch()).unwrap();
+            match input_send.send(getch()) {Ok(_) => {}, Err(e) => {warn!("Error sending input to the UI-sync thread :  {}", e);}};
         }
     });
     
@@ -111,7 +113,7 @@ fn main()
     * recieve data, wait for data until data is sent.
     */
     let mut jsonobject:json::JsonValue;
-    send_data_request.send(Box::new(object!{"initial" => true}));
+    match send_data_request.send(Box::new(object!{"initial" => true})) {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
     jsonobject = *(recieve_answer.recv().unwrap());
     
 
@@ -127,7 +129,7 @@ fn main()
         if update_tick.elapsed() >= time::Duration::from_millis(2000)
         {
             update_tick = time::Instant::now();
-            send_data_request.send(Box::new(ui_data.jsonify()));
+            match send_data_request.send(Box::new(ui_data.jsonify())) {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
             match recieve_answer.recv()
             {
                 Ok(val) =>
@@ -140,7 +142,7 @@ fn main()
                         ui_data.nav_encounter_win_scroll.1 = 0;
                     }
                 },
-                Err(e) => {}
+                Err(e) => {warn!("ERROR recieving answer from the parser backend : {}", e);}
             }
         }
         match input_recieve.recv_timeout(timeout)
@@ -163,7 +165,7 @@ fn main()
                                     /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
                                     speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
                                 },
-                                Err(e)=>{println!("Clipboard error: {}", e);}
+                                Err(e)=>{warn!("ERROR with the clipboard : {}", e);}
                             };
                         }
                         else
@@ -310,7 +312,7 @@ fn main()
                     }
                     //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
                 },
-            Err(e) => {}
+            Err(e) => {warn!("ERROR recieving data from user input : {}", e);}
         }
         /*
         * parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend

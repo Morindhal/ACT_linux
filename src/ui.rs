@@ -5,13 +5,14 @@ use json::JsonValue;
 
 static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
 
+// TODO: Change all enums to have a usize value in order to hold the navigation instead of the current, more primitive, tuple-solution.
 #[derive(PartialEq, Eq)]
 pub enum PrimaryView
 {
     EncounterList,
     CombatantList,
-    CombatantInspect,
-    AbilityTrack(i32)
+    CombatantInspect(usize),
+    AbilityTrack(usize)
 }
 
 pub struct UiData
@@ -40,15 +41,16 @@ impl UiData
         match self.nav_xy.last().unwrap().2
         {
             PrimaryView::EncounterList => self.nav_xy.push((0,0,PrimaryView::CombatantList)),
-            PrimaryView::CombatantList => self.nav_xy.push((0,0,PrimaryView::CombatantInspect)),
-            PrimaryView::CombatantInspect => self.nav_xy.push((0,0,PrimaryView::AbilityTrack(0))),
+            PrimaryView::CombatantList => self.nav_xy.push((0,0,PrimaryView::CombatantInspect(0))),
+            PrimaryView::CombatantInspect(_) => self.nav_xy.push((0,0,PrimaryView::AbilityTrack(0))),
             _ => {}
         }
     }
     
     pub fn surface(&mut self)
     {
-        self.nav_xy.pop();
+        if self.nav_xy.len() > 0
+            {self.nav_xy.pop();}
     }
     
     pub fn up(&mut self)
@@ -77,8 +79,16 @@ impl UiData
             object!
             {
                 "EncounterList" => true,
+                "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, PrimaryView::EncounterList)).0
+            }
+        }
+        else if match self.nav_xy.last().unwrap().2 {PrimaryView::CombatantInspect(_) => true, _ => false}
+        {
+            object!
+            {
+                "EncounterList" => true,
                 "EncounterSpecific" => self.nav_xy.last().unwrap_or(&(0, 0, PrimaryView::EncounterList)).0,
-                "CombatantSpecific" => 0 //placeholder i32's, should be usize of the currently selected encounter/combatant
+                "CombatantSpecific" => match self.nav_xy.last().unwrap().2 {PrimaryView::CombatantInspect(val) => val, _ => 0usize} //placeholder i32's, should be usize of the currently selected encounter/combatant
             }
         }
         //else if whatever view --> make json
@@ -105,11 +115,11 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 
     let display_win = newwin(ui_data.nav_main_win_scroll.0, max_x-ENCOUNTER_WINDOW_WIDTH, 20,ENCOUNTER_WINDOW_WIDTH);
     let header_win = newwin(20, max_x, 0, 0);
-    let EncounterList_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
+    let encounter_list_win = newwin(ui_data.nav_encounter_win_scroll.0, ENCOUNTER_WINDOW_WIDTH, 20, 0);
 
     wclear(display_win);
     wclear(header_win);
-    wclear(EncounterList_win);
+    wclear(encounter_list_win);
     
     
     wmove(header_win, 1, 1);
@@ -133,25 +143,38 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
             wprintw(display_win, &*format!("{name}: {dps:.3}m ", name=combatant["Name"], dps=dps));
         }
     }
+    else if draw_object["CombatantSpecific"] != "null"
+    {
+        wmove(display_win, 1, 1);
+        wattron(display_win, A_BOLD());
+        wprintw(display_win, "\tEncounters:\n\n");
+        wattroff(display_win, A_BOLD());
+        //wprintw(display_win, draw_object.dump().as_str());
+        
+        for attacks in draw_object["CombatantSpecific"].members() // should contain a list of what a ability did, parse that into %-ages.
+        {
+            wprintw(display_win, &*format!("SUPER ATTACK % LIST!!! {}", attacks));
+        }
+    }
 
     for encounter in draw_object["EncounterList"].members()
     {
-        wmove(EncounterList_win, 1, 1);
-        wprintw(EncounterList_win, &*format!(" {}", encounter["Name"]));
+        wmove(encounter_list_win, 1, 1);
+        wprintw(encounter_list_win, &*format!(" {}", encounter["Name"]));
     }
     
 
     wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
     wborder(header_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
-    wborder(EncounterList_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
+    wborder(encounter_list_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
 
     wrefresh(display_win);
     wrefresh(header_win);
-    wrefresh(EncounterList_win);
+    wrefresh(encounter_list_win);
 
     delwin(display_win);
     delwin(header_win);
-    delwin(EncounterList_win);
+    delwin(encounter_list_win);
 }
 
 /*
