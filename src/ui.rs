@@ -128,7 +128,7 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
     wprintw(header_win, &ui_data.filters);
     
 
-    if draw_object["EncounterSpecific"] != "null"
+    if draw_object["EncounterSpecific"].is_null() != true
     {
         wmove(display_win, 1, 1);
         wattron(display_win, A_BOLD());
@@ -138,12 +138,12 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
         
         for combatant in draw_object["EncounterSpecific"].members()
         {
-            let duration = draw_object["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap();
-            let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap() / duration)/1000000.0  };
-            wprintw(display_win, &*format!("{name}: {dps:.3}m ", name=combatant["Name"], dps=dps));
+            let duration = draw_object["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap_or(0f64);
+            let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap_or(0f64) / duration)/1000000.0  };
+            wprintw(display_win, &*format!("     {name}: {dps:.3}m ", name=combatant["Name"], dps=dps));
         }
     }
-    else if draw_object["CombatantSpecific"] != "null"
+    else if draw_object["CombatantSpecific"].is_null() != true
     {
         wmove(display_win, 1, 1);
         wattron(display_win, A_BOLD());

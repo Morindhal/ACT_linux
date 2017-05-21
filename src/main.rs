@@ -7,6 +7,7 @@ extern crate mmo_parser_backend;
 extern crate json;
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 
 use std::sync::mpsc::{self};
 
@@ -16,6 +17,7 @@ use std::os::raw::c_char;
 use clap::{Arg, App};
 
 use clipboard::ClipboardContext;
+use clipboard::ClipboardProvider;
 
 use ncurses::*;
 
@@ -25,6 +27,7 @@ use std::{thread, time};
 mod ui;
 
 use mmo_parser_backend::eventloop::event_loop;
+use log::LogLevel;
 
 
 fn speak(data: &CStr) {
@@ -37,6 +40,7 @@ fn speak(data: &CStr) {
 
 fn main()
 {
+    env_logger::init().unwrap();
     let matches = App::new("mmo_parser_cli")
         .version("0.1.0")
         .author("Bergman. <Morindhal@gmail.com>")
@@ -79,7 +83,7 @@ fn main()
             match input_send.send(getch()) {Ok(_) => {}, Err(e) => {warn!("Error sending input to the UI-sync thread :  {}", e);}};
         }
     });
-    
+
 /*    let timer_counter = thread::spawn(move || 
     {
         let timeout = time::Duration::from_millis(500);
@@ -115,9 +119,8 @@ fn main()
     let mut jsonobject:json::JsonValue;
     match send_data_request.send(Box::new(object!{"initial" => true})) {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
     jsonobject = *(recieve_answer.recv().unwrap());
-    
 
-    let mut ctx = ClipboardContext::new().unwrap();
+    let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
     let timeout = time::Duration::from_millis(1);
     let mut ui_data = ui::UiData{nav_xy: vec![(0,0,ui::PrimaryView::EncounterList)], nav_lock_encounter: false, nav_lock_combatant: false, nav_lock_filter: false, nav_lock_refresh: true, nav_main_win_scroll: (0, 0), nav_encounter_win_scroll: (5, 0), filters: String::from(""), debug: false};
     let mut update_ui = true;
@@ -129,7 +132,7 @@ fn main()
         if update_tick.elapsed() >= time::Duration::from_millis(2000)
         {
             update_tick = time::Instant::now();
-            match send_data_request.send(Box::new(ui_data.jsonify())) {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
+            send_data_request.send(Box::new(ui_data.jsonify())).unwrap();// {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
             match recieve_answer.recv()
             {
                 Ok(val) =>
@@ -142,7 +145,7 @@ fn main()
                         ui_data.nav_encounter_win_scroll.1 = 0;
                     }
                 },
-                Err(e) => {warn!("ERROR recieving answer from the parser backend : {}", e);}
+                Err(e) => {}//warn!("ERROR recieving answer from the parser backend : {}", e);}
             }
         }
         match input_recieve.recv_timeout(timeout)
@@ -158,7 +161,7 @@ fn main()
                     {
                         if !ui_data.is_locked()
                         {
-                            match ctx.set_contents(format!("{}", jsonobject["encounters"][ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
+                            match ctx.set_contents(format!("{}", jsonobject["EncounterList"][ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
                             {
                                 Ok(_)=>
                                 {
@@ -181,7 +184,7 @@ fn main()
                     },
                     KEY_DOWN => 
                     {
-                        if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < jsonobject["combatants"].len() as i32 - 1
+                        if ui_data.nav_lock_encounter && ui_data.nav_xy[1].0 < jsonobject["EncounterSpecific"].len() as i32 - 1
                         {
                             ui_data.nav_xy.last_mut().unwrap().0 += 1;
                         }
@@ -189,7 +192,7 @@ fn main()
                         {
                             ui_data.nav_xy.last_mut().unwrap().0 += 1;
                         }
-                        else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < jsonobject["encounters"].len() as i32 - 1
+                        else if !ui_data.is_locked() && ui_data.nav_xy.last().unwrap().0 < jsonobject["EncounterList"].len() as i32 - 1
                         {
                             if ui_data.nav_encounter_win_scroll.1 > 0
                             {
@@ -241,7 +244,7 @@ fn main()
                         }
                         else if !ui_data.is_locked()
                         {
-                            if ui_data.nav_xy.last().unwrap().0 == jsonobject["encounters"].len() as i32
+                            if ui_data.nav_xy.last().unwrap().0 == jsonobject["EncounterList"].len() as i32
                             {
                                 ui_data.nav_xy.last_mut().unwrap().0 -= 1; // ugly code, will bug around --- needs fix
                             }
@@ -351,6 +354,8 @@ send a request-JSON-object to the parser, this contains a wish-list of what I wa
         This has the benefit of being doable even if the response doesn't exactly match expectations.
     This request changes depending on user input.
         Limit how many resonses that are wanted by low+count?
+        
+TODO: Retool navigation.
 
 
 */
