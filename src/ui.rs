@@ -55,12 +55,12 @@ impl UiData
     
     pub fn up(&mut self)
     {
-        self.nav_xy.last_mut().unwrap().0 +=1;
+        self.nav_xy.last_mut().unwrap().0 -=1;
     }
     
     pub fn down(&mut self)
     {
-        self.nav_xy.last_mut().unwrap().0 =-1;
+        self.nav_xy.last_mut().unwrap().0 +=1;
     }
     
     pub fn jsonify(&self)
@@ -140,7 +140,7 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
         {
             let duration = draw_object["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap_or(0f64);
             let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap_or(0f64) / duration)/1000000.0  };
-            wprintw(display_win, &*format!("     {name}: {dps:.3}m ", name=combatant["Name"], dps=dps));
+            wprintw(display_win, &*build_string(combatant["Name"].as_str().unwrap(), dps));
         }
     }
     else if draw_object["CombatantSpecific"].is_null() != true
@@ -157,11 +157,11 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
         }
     }
 
-    for encounter in draw_object["EncounterList"].members()
-    {
-        wmove(encounter_list_win, 1, 1);
+    wmove(encounter_list_win, 1, 1);
+    for encounter in draw_object["EncounterList"].members() {
         wprintw(encounter_list_win, &*format!(" {}", encounter["Name"]));
     }
+    wmove(encounter_list_win, ui_data.nav_xy.last().unwrap().0+1, 1);
     
 
     wborder(display_win, '|' as chtype, '|' as chtype, '-' as chtype, '-' as chtype, '+' as chtype, '+' as chtype, '+' as chtype, '+' as chtype);
@@ -175,6 +175,12 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
     delwin(display_win);
     delwin(header_win);
     delwin(encounter_list_win);
+}
+
+pub fn build_string(name: &str, dps: f64)
+    -> String
+{
+    format!("     {name}: {dps:.3}m ", name=name, dps=dps)
 }
 
 /*

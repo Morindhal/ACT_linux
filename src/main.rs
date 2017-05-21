@@ -129,25 +129,6 @@ fn main()
     
     'ui: loop
     {
-        if update_tick.elapsed() >= time::Duration::from_millis(2000)
-        {
-            update_tick = time::Instant::now();
-            send_data_request.send(Box::new(ui_data.jsonify())).unwrap();// {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
-            match recieve_answer.recv()
-            {
-                Ok(val) =>
-                {
-                    jsonobject = *val;
-                    update_ui = true;
-                    if ui_data.nav_xy.last().unwrap().2 == ui::PrimaryView::EncounterList && !ui_data.nav_lock_refresh
-                    {
-                        ui_data.nav_xy[0].0 = jsonobject["EncounterList"].len() as i32 - 1;
-                        ui_data.nav_encounter_win_scroll.1 = 0;
-                    }
-                },
-                Err(e) => {}//warn!("ERROR recieving answer from the parser backend : {}", e);}
-            }
-        }
         match input_recieve.recv_timeout(timeout)
         {
             Ok(val) => match val
@@ -161,15 +142,22 @@ fn main()
                     {
                         if !ui_data.is_locked()
                         {
-                            match ctx.set_contents(format!("{}", jsonobject["EncounterList"][ui_data.nav_xy[0].0 as usize - ui_data.nav_encounter_win_scroll.1 as usize]))//if ui_data.nav_xy[0].0 >= encounters.len() as i32 {&encounters[encounters.len()-1 as usize]} else {&encounters[ui_data.nav_xy[0].0 as usize]}))
-                            {
-                                Ok(_)=>
+                            match ctx.set_contents(format!("{}",
+                                { let mut returnstring = String::new();
+                                    for combatant in jsonobject["EncounterSpecific"].members()
+                                    {
+                                        let duration = jsonobject["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap_or(0f64);
+                                        let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap_or(0f64) / duration)/1000000.0  };
+                                        returnstring += ui::build_string(combatant["Name"].as_str().unwrap(), dps).as_str();
+                                    }returnstring}))
                                 {
-                                    /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
-                                    speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
-                                },
-                                Err(e)=>{warn!("ERROR with the clipboard : {}", e);}
-                            };
+                                    Ok(_)=>
+                                    {
+                                        /*This is currently linux dependant, probably not the best idea for future alerts but for now it "works" assuming one has the correct file on the system*/
+                                        speak(&CString::new(format!("paplay /usr/share/sounds/freedesktop/stereo/message.oga")).unwrap());
+                                    },
+                                    Err(e)=>{warn!("ERROR with the clipboard : {}", e);}
+                                };
                         }
                         else
                         {
@@ -179,8 +167,10 @@ fn main()
                     },
                     KEY_UP => 
                     {
-                        ui_data.up();
-                        update_ui = true;
+                        if ui_data.nav_xy.last_mut().unwrap().0 > 0 {
+                            ui_data.up();
+                            update_ui = true;
+                        }
                     },
                     KEY_DOWN => 
                     {
@@ -316,6 +306,25 @@ fn main()
                     //ui_update(&format!("{}", val), &player_display, &mut ui_data, &encounters);}//ui_update(&format!("{}", encounters[0].attackers.len()), &player_display, &pointer, &encounters, &current_encounter);}//}
                 },
             Err(e) => {warn!("ERROR recieving data from user input : {}", e);}
+        }
+        if update_ui || update_tick.elapsed() >= time::Duration::from_millis(3000)
+        {
+            update_tick = time::Instant::now();
+            send_data_request.send(Box::new(ui_data.jsonify())).unwrap();// {Ok(_) => {}, Err(e) => {warn!("Error sending input to the parser backend :  {}", e);}};
+            match recieve_answer.recv()
+            {
+                Ok(val) =>
+                {
+                    jsonobject = *val;
+                    if ui_data.nav_xy.last().unwrap().2 == ui::PrimaryView::EncounterList && !update_ui// && !ui_data.nav_lock_refresh
+                    {
+                        ui_data.nav_xy[0].0 = jsonobject["EncounterList"].len() as i32 - 1;
+                        ui_data.nav_encounter_win_scroll.1 = 0;
+                    }
+                    update_ui = true;
+                },
+                Err(e) => {}//warn!("ERROR recieving answer from the parser backend : {}", e);}
+            }
         }
         /*
         * parse what data the program is currently interested in and send that in a request to the Sender recieved from mmo_parser_backend
