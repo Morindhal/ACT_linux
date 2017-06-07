@@ -159,7 +159,7 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 
     wmove(encounter_list_win, 1, 1);
     for encounter in draw_object["EncounterList"].members() {
-        wprintw(encounter_list_win, &*format!(" {}", encounter["Name"]));
+        wprintw(encounter_list_win, &*format!(" {}\n", encounter["Duration"]));
     }
     wmove(encounter_list_win, ui_data.nav_xy.last().unwrap().0+1, 1);
     
@@ -180,7 +180,7 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 pub fn build_string(name: &str, dps: f64)
     -> String
 {
-    format!("     {name}: {dps:.3}m ", name=name, dps=dps)
+    format!("     {name}: {dps:.3}m\n", name=name, dps=dps)
 }
 
 /*
