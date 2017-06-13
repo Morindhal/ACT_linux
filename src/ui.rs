@@ -1,6 +1,7 @@
 
 use ncurses::*;
 use json::JsonValue;
+use std::time;
 
 
 static ENCOUNTER_WINDOW_WIDTH: i32 = 30;
@@ -140,7 +141,15 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
         {
             let duration = draw_object["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap_or(0f64);
             let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap_or(0f64) / duration)/1000000.0  };
-            wprintw(display_win, &*build_string(combatant["Name"].as_str().unwrap(), dps));
+            
+            if combatant["Name"].as_str().unwrap().contains(highlight) {
+                wattron(display_win, COLOR_PAIR(1));
+                wprintw(display_win, &*build_string(combatant["Name"].as_str().unwrap(), dps));
+                wattroff(display_win, COLOR_PAIR(1));
+            }
+            else {
+                wprintw(display_win, &*build_string(combatant["Name"].as_str().unwrap(), dps));
+            }
         }
     }
     else if draw_object["CombatantSpecific"].is_null() != true
@@ -159,7 +168,11 @@ pub fn ui_draw(highlight: &str, draw_object: &JsonValue, ui_data: &mut UiData)
 
     wmove(encounter_list_win, 1, 1);
     for encounter in draw_object["EncounterList"].members() {
-        wprintw(encounter_list_win, &*format!(" {}\n", encounter["Duration"]));
+        let duration = encounter["Duration"].as_u64().unwrap_or(0u64);
+        let hours = (duration - duration%3600)/3600;
+        let minutes = (duration - (duration-hours*3600)%60 ) / 60;
+        let seconds = duration -hours*3600 -minutes*60;
+        wprintw(encounter_list_win, &*format!(" {:02}:{:02}:{:02}\n", hours, minutes, seconds));
     }
     wmove(encounter_list_win, ui_data.nav_xy.last().unwrap().0+1, 1);
     
