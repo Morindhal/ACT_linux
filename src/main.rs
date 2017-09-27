@@ -143,12 +143,13 @@ fn main()
                         if !ui_data.is_locked()
                         {
                             match ctx.set_contents(format!("{}",
-                                { let mut returnstring = String::new();
+                                { 
+                                    let duration = jsonobject["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap_or(0f64);
+                                    let mut returnstring = format!("Duration: {}:{}\n", (duration/60f64) as usize, duration%60f64);
                                     for combatant in jsonobject["EncounterSpecific"].members()
                                     {
-                                        let duration = jsonobject["EncounterList"][ui_data.nav_xy.last().unwrap().0 as usize]["Duration"].as_f64().unwrap_or(0f64);
                                         let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap_or(0f64) / duration)/1000000.0  };
-                                        returnstring += ui::build_string(combatant["Name"].as_str().unwrap(), dps).as_str();
+                                        returnstring += format!("{name:.4}: {dps:.1}m\n", name=combatant["Name"].as_str().unwrap(), dps=dps).as_str();
                                     }returnstring}))
                                 {
                                     Ok(_)=>
