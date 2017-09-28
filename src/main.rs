@@ -149,7 +149,7 @@ fn main()
                                     for combatant in jsonobject["EncounterSpecific"].members()
                                     {
                                         let dps = match duration{0.0=>0.0, _=>(combatant["Damage"].as_f64().unwrap_or(0f64) / duration)/1000000.0  };
-                                        returnstring += format!("{name:.4}: {dps:.1}m\n", name=combatant["Name"].as_str().unwrap(), dps=dps).as_str();
+                                        returnstring += format!("{name:.4}: {dps:.0}m\n", name=combatant["Name"].as_str().unwrap(), dps=dps).as_str();
                                     }returnstring}))
                                 {
                                     Ok(_)=>
